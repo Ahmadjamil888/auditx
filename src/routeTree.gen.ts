@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SecurityRouteImport } from './routes/security'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HowItWorksRoute = HowItWorksRouteImport.update({
+  id: '/how-it-works',
+  path: '/how-it-works',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -31,30 +37,34 @@ const SecurityRoute = SecurityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/pricing': typeof PricingRoute
   '/security': typeof SecurityRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/pricing': typeof PricingRoute
   '/security': typeof SecurityRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/how-it-works': typeof HowItWorksRoute
   '/pricing': typeof PricingRoute
   '/security': typeof SecurityRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/pricing' | '/security'
+  fullPaths: '/' | '/how-it-works' | '/pricing' | '/security'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/pricing' | '/security'
-  id: '__root__' | '/' | '/pricing' | '/security'
+  to: '/' | '/how-it-works' | '/pricing' | '/security'
+  id: '__root__' | '/' | '/how-it-works' | '/pricing' | '/security'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HowItWorksRoute: typeof HowItWorksRoute
   PricingRoute: typeof PricingRoute
   SecurityRoute: typeof SecurityRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/how-it-works': {
+      id: '/how-it-works'
+      path: '/how-it-works'
+      fullPath: '/how-it-works'
+      preLoaderRoute: typeof HowItWorksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HowItWorksRoute: HowItWorksRoute,
   PricingRoute: PricingRoute,
   SecurityRoute: SecurityRoute,
 }
