@@ -53,7 +53,7 @@ export function Btn({
   type = "button",
   disabled,
 }: BtnProps) {
-  const styles: Record<string, React.CSSProperties> = {
+  const styles: Record<NonNullable<BtnProps["variant"]>, React.CSSProperties> = {
     primary: {
       background: "var(--color-accent)",
       color: "#fff",
