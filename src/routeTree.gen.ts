@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as NewsRouteImport } from './routes/news'
@@ -19,6 +20,11 @@ import { Route as SecurityRouteImport } from './routes/security'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -49,6 +55,7 @@ const SecurityRoute = SecurityRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
@@ -75,12 +84,26 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/help' | '/how-it-works' | '/news' | '/pricing' | '/security'
+    | '/'
+    | '/about'
+    | '/help'
+    | '/how-it-works'
+    | '/news'
+    | '/pricing'
+    | '/security'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/help' | '/how-it-works' | '/news' | '/pricing' | '/security'
+  to:
+    | '/'
+    | '/about'
+    | '/help'
+    | '/how-it-works'
+    | '/news'
+    | '/pricing'
+    | '/security'
   id:
     | '__root__'
     | '/'
+    | '/about'
     | '/help'
     | '/how-it-works'
     | '/news'
@@ -90,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
   HelpRoute: typeof HelpRoute
   HowItWorksRoute: typeof HowItWorksRoute
   NewsRoute: typeof NewsRoute
@@ -104,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -146,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
   HelpRoute: HelpRoute,
   HowItWorksRoute: HowItWorksRoute,
   NewsRoute: NewsRoute,
