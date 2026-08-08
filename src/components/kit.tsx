@@ -71,7 +71,7 @@ export function Btn({
       whileHover={{ scale: 1.04, filter: "brightness(1.08)" }}
       whileTap={{ scale: 0.96 }}
       className={`${base} px-5 py-2.5 text-sm ${className}`}
-      style={styles[variant]! as React.ComponentProps<typeof motion.button>["style"]}
+      style={styles[variant]! as NonNullable<React.ComponentProps<typeof motion.button>["style"]>}
     >
       {children}
     </motion.button>
@@ -85,7 +85,7 @@ export function Panel({
 }: {
   children: ReactNode;
   className?: string;
-  style?: React.CSSProperties;
+  style?: React.CSSProperties | undefined;
 }) {
   return (
     <div

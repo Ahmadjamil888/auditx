@@ -188,7 +188,7 @@ function Home() {
         <div className="absolute inset-0" style={{ background: "rgba(242,242,238,0.55)" }} />
         <div className="relative">
           <Navbar />
-          <Container style={{}} className="pb-24">
+          <Container className="pb-24">
             <div style={{ paddingTop: "clamp(40px, 8vw, 72px)" }} className="max-w-[560px]">
               <motion.h1
                 variants={reveal}
@@ -471,7 +471,7 @@ function Home() {
                       className="flex size-9 items-center justify-center rounded-full text-xs font-semibold"
                       style={{ background: "rgba(115,66,226,0.1)", color: "var(--color-accent)" }}
                     >
-                      {name.charAt(0)}
+                      {String(name).charAt(0)}
                     </div>
                     <div>
                       <p className="text-sm font-semibold">{name}</p>
@@ -502,7 +502,7 @@ function Home() {
                           border: "2px solid var(--color-accent)",
                           boxShadow: "var(--shadow-hover)",
                         }
-                      : undefined
+                      : {}
                   }
                 >
                   <div className="flex items-center justify-between">
