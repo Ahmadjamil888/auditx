@@ -62,7 +62,25 @@
 }
 
 :root {
+  --font-heading: "Helvetica Now Display Bold", "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --color-text: #192837;
+  --color-accent: #7342e2;
+  --color-accent-hover: #8f63ea;
+  --color-accent-pressed: #5b2fc0;
+  --color-login-bg: #f2f2ee;
+  --color-sheet: #cfc8c5;
+  --hairline: rgba(25, 40, 55, 0.08);
+  --ink-2: rgba(25, 40, 55, 0.65);
+  --ink-3: rgba(25, 40, 55, 0.4);
+  --ok: #1f9d63;
+  --warn: #c98a1a;
+  --bad: #d64545;
+  --info: #3b6fd1;
+  --shadow-card: 0 2px 12px rgba(25, 40, 55, 0.06);
+  --shadow-hover: 0 4px 24px rgba(115, 66, 226, 0.12);
   --radius: 0.625rem;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.129 0.042 264.695);
   --card: oklch(1 0 0);
