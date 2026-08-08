@@ -160,3 +160,34 @@
     color: var(--color-foreground);
   }
 }
+
+@theme inline {
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --color-ink: var(--color-text);
+  --color-accent: var(--color-accent);
+  --color-canvas: var(--color-login-bg);
+  --color-sheet: var(--color-sheet);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: var(--color-text);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.01em;
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
