@@ -102,16 +102,16 @@ function safeParseJSON(raw: string): LooseJSON {
 
 function buildFields(parsed: LooseJSON, confidences: Record<string, number>): ExtractedField[] {
   return [
-    { field: "Transaction Date",  value: String(parsed.transaction_date ?? ""), confidence: confidences.transaction_date ?? 0.5 },
-    { field: "Ticker Symbol",     value: String(parsed.ticker ?? ""),           confidence: confidences.ticker           ?? 0.5 },
-    { field: "Action",            value: String(parsed.action ?? ""),           confidence: confidences.action           ?? 0.5 },
-    { field: "Quantity",          value: String(parsed.quantity ?? ""),         confidence: confidences.quantity         ?? 0.5 },
-    { field: "Execution Price",   value: String(parsed.price ?? ""),            confidence: confidences.price            ?? 0.5 },
-    { field: "Commission / Fees", value: String(parsed.fees ?? 0),             confidence: confidences.fees             ?? 0.5 },
-    { field: "WHT",               value: String(parsed.wht ?? 0),              confidence: confidences.wht              ?? 0.5 },
-    { field: "Reference ID",      value: String(parsed.ref_id ?? ""),           confidence: confidences.ref_id           ?? 0.5 },
-    { field: "Broker Name",       value: String(parsed.broker ?? ""),           confidence: confidences.broker           ?? 0.5 },
-    { field: "Exchange",          value: String(parsed.exchange ?? ""),         confidence: confidences.exchange         ?? 0.5 },
+    { field: "Transaction Date",  value: String(parsed.transaction_date ?? ""), confidence: confidences['transaction_date'] ?? 0.5 },
+    { field: "Ticker Symbol",     value: String(parsed.ticker ?? ""),           confidence: confidences['ticker']           ?? 0.5 },
+    { field: "Action",            value: String(parsed.action ?? ""),           confidence: confidences['action']           ?? 0.5 },
+    { field: "Quantity",          value: String(parsed.quantity ?? ""),         confidence: confidences['quantity']         ?? 0.5 },
+    { field: "Execution Price",   value: String(parsed.price ?? ""),            confidence: confidences['price']            ?? 0.5 },
+    { field: "Commission / Fees", value: String(parsed.fees ?? 0),             confidence: confidences['fees']             ?? 0.5 },
+    { field: "WHT",               value: String(parsed.wht ?? 0),              confidence: confidences['wht']              ?? 0.5 },
+    { field: "Reference ID",      value: String(parsed.ref_id ?? ""),           confidence: confidences['ref_id']           ?? 0.5 },
+    { field: "Broker Name",       value: String(parsed.broker ?? ""),           confidence: confidences['broker']           ?? 0.5 },
+    { field: "Exchange",          value: String(parsed.exchange ?? ""),         confidence: confidences['exchange']         ?? 0.5 },
   ];
 }
 
