@@ -15,7 +15,7 @@
 [![Gemini AI](https://img.shields.io/badge/Google-Gemini_2.0-4285F4.svg?style=flat-square&logo=google&logoColor=white)](https://aistudio.google.com/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-646CFF.svg?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
 
-[**Live Demo**](https://auditx-beta.vercel.app) · [**Documentation**](#-documentation) · [**Quick Start**](#-quick-start) · [**Report a Bug**](https://github.com/auditx/auditx/issues)
+[**Live Demo**](https://auditx-beta.vercel.app) · [**Documentation**](#-documentation) · [**Quick Start**](#-quick-start) · [**Report a Bug**](https://github.com/Ahmadjamil888/auditx/issues)
 
 ---
 
