@@ -1,14 +1,23 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+# AuditX — robots.txt
+# https://auditx.app
 
 User-agent: *
 Allow: /
+Disallow: /app/
+Disallow: /api/
+Disallow: /_/
+
+# Allow key marketing pages
+Allow: /pricing
+Allow: /security
+Allow: /how-it-works
+Allow: /about
+Allow: /contact
+Allow: /help
+Allow: /news
+
+# Sitemap
+Sitemap: https://auditx.app/sitemap.xml
+
+# Crawl delay (be nice to servers)
+Crawl-delay: 10

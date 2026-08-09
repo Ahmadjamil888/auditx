@@ -11,12 +11,25 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SecurityRouteImport } from './routes/security'
+import { Route as SigninRouteImport } from './routes/signin'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
+import { Route as AppBillingRouteImport } from './routes/app.billing'
+import { Route as AppLedgerRouteImport } from './routes/app.ledger'
+import { Route as AppOverviewRouteImport } from './routes/app.overview'
+import { Route as AppParserRouteImport } from './routes/app.parser'
+import { Route as AppReconciliationRouteImport } from './routes/app.reconciliation'
+import { Route as AppReportsRouteImport } from './routes/app.reports'
+import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppTaxRouteImport } from './routes/app.tax'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,9 +41,19 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -58,80 +81,217 @@ const SecurityRoute = SecurityRouteImport.update({
   path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppAuditTrailRoute = AppAuditTrailRouteImport.update({
+  id: '/audit-trail',
+  path: '/audit-trail',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBillingRoute = AppBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLedgerRoute = AppLedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOverviewRoute = AppOverviewRouteImport.update({
+  id: '/overview',
+  path: '/overview',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppParserRoute = AppParserRouteImport.update({
+  id: '/parser',
+  path: '/parser',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReconciliationRoute = AppReconciliationRouteImport.update({
+  id: '/reconciliation',
+  path: '/reconciliation',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTaxRoute = AppTaxRouteImport.update({
+  id: '/tax',
+  path: '/tax',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/app': typeof AppRouteWithChildren
   '/contact': typeof ContactRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
   '/pricing': typeof PricingRoute
   '/security': typeof SecurityRoute
+  '/signin': typeof SigninRoute
+  '/signup': typeof SignupRoute
+  '/app/audit-trail': typeof AppAuditTrailRoute
+  '/app/billing': typeof AppBillingRoute
+  '/app/ledger': typeof AppLedgerRoute
+  '/app/overview': typeof AppOverviewRoute
+  '/app/parser': typeof AppParserRoute
+  '/app/reconciliation': typeof AppReconciliationRoute
+  '/app/reports': typeof AppReportsRoute
+  '/app/settings': typeof AppSettingsRoute
+  '/app/tax': typeof AppTaxRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/app': typeof AppRouteWithChildren
   '/contact': typeof ContactRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
   '/pricing': typeof PricingRoute
   '/security': typeof SecurityRoute
+  '/signin': typeof SigninRoute
+  '/signup': typeof SignupRoute
+  '/app/audit-trail': typeof AppAuditTrailRoute
+  '/app/billing': typeof AppBillingRoute
+  '/app/ledger': typeof AppLedgerRoute
+  '/app/overview': typeof AppOverviewRoute
+  '/app/parser': typeof AppParserRoute
+  '/app/reconciliation': typeof AppReconciliationRoute
+  '/app/reports': typeof AppReportsRoute
+  '/app/settings': typeof AppSettingsRoute
+  '/app/tax': typeof AppTaxRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/app': typeof AppRouteWithChildren
   '/contact': typeof ContactRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
   '/pricing': typeof PricingRoute
   '/security': typeof SecurityRoute
+  '/signin': typeof SigninRoute
+  '/signup': typeof SignupRoute
+  '/app/audit-trail': typeof AppAuditTrailRoute
+  '/app/billing': typeof AppBillingRoute
+  '/app/ledger': typeof AppLedgerRoute
+  '/app/overview': typeof AppOverviewRoute
+  '/app/parser': typeof AppParserRoute
+  '/app/reconciliation': typeof AppReconciliationRoute
+  '/app/reports': typeof AppReportsRoute
+  '/app/settings': typeof AppSettingsRoute
+  '/app/tax': typeof AppTaxRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/about'
+    | '/app'
     | '/contact'
+    | '/forgot-password'
     | '/help'
     | '/how-it-works'
     | '/news'
     | '/pricing'
     | '/security'
+    | '/signin'
+    | '/signup'
+    | '/app/audit-trail'
+    | '/app/billing'
+    | '/app/ledger'
+    | '/app/overview'
+    | '/app/parser'
+    | '/app/reconciliation'
+    | '/app/reports'
+    | '/app/settings'
+    | '/app/tax'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
+    | '/app'
     | '/contact'
+    | '/forgot-password'
     | '/help'
     | '/how-it-works'
     | '/news'
     | '/pricing'
     | '/security'
+    | '/signin'
+    | '/signup'
+    | '/app/audit-trail'
+    | '/app/billing'
+    | '/app/ledger'
+    | '/app/overview'
+    | '/app/parser'
+    | '/app/reconciliation'
+    | '/app/reports'
+    | '/app/settings'
+    | '/app/tax'
   id:
     | '__root__'
     | '/'
     | '/about'
+    | '/app'
     | '/contact'
+    | '/forgot-password'
     | '/help'
     | '/how-it-works'
     | '/news'
     | '/pricing'
     | '/security'
+    | '/signin'
+    | '/signup'
+    | '/app/audit-trail'
+    | '/app/billing'
+    | '/app/ledger'
+    | '/app/overview'
+    | '/app/parser'
+    | '/app/reconciliation'
+    | '/app/reports'
+    | '/app/settings'
+    | '/app/tax'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  AppRoute: typeof AppRouteWithChildren
   ContactRoute: typeof ContactRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   HelpRoute: typeof HelpRoute
   HowItWorksRoute: typeof HowItWorksRoute
   NewsRoute: typeof NewsRoute
   PricingRoute: typeof PricingRoute
   SecurityRoute: typeof SecurityRoute
+  SigninRoute: typeof SigninRoute
+  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -150,11 +310,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contact': {
       id: '/contact'
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -192,19 +366,136 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app/audit-trail': {
+      id: '/app/audit-trail'
+      path: '/audit-trail'
+      fullPath: '/app/audit-trail'
+      preLoaderRoute: typeof AppAuditTrailRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/billing': {
+      id: '/app/billing'
+      path: '/billing'
+      fullPath: '/app/billing'
+      preLoaderRoute: typeof AppBillingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/ledger': {
+      id: '/app/ledger'
+      path: '/ledger'
+      fullPath: '/app/ledger'
+      preLoaderRoute: typeof AppLedgerRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/overview': {
+      id: '/app/overview'
+      path: '/overview'
+      fullPath: '/app/overview'
+      preLoaderRoute: typeof AppOverviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/parser': {
+      id: '/app/parser'
+      path: '/parser'
+      fullPath: '/app/parser'
+      preLoaderRoute: typeof AppParserRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/reconciliation': {
+      id: '/app/reconciliation'
+      path: '/reconciliation'
+      fullPath: '/app/reconciliation'
+      preLoaderRoute: typeof AppReconciliationRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/reports': {
+      id: '/app/reports'
+      path: '/reports'
+      fullPath: '/app/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/settings': {
+      id: '/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/tax': {
+      id: '/app/tax'
+      path: '/tax'
+      fullPath: '/app/tax'
+      preLoaderRoute: typeof AppTaxRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
+
+interface AppRouteChildren {
+  AppAuditTrailRoute: typeof AppAuditTrailRoute
+  AppBillingRoute: typeof AppBillingRoute
+  AppLedgerRoute: typeof AppLedgerRoute
+  AppOverviewRoute: typeof AppOverviewRoute
+  AppParserRoute: typeof AppParserRoute
+  AppReconciliationRoute: typeof AppReconciliationRoute
+  AppReportsRoute: typeof AppReportsRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppTaxRoute: typeof AppTaxRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAuditTrailRoute: AppAuditTrailRoute,
+  AppBillingRoute: AppBillingRoute,
+  AppLedgerRoute: AppLedgerRoute,
+  AppOverviewRoute: AppOverviewRoute,
+  AppParserRoute: AppParserRoute,
+  AppReconciliationRoute: AppReconciliationRoute,
+  AppReportsRoute: AppReportsRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppTaxRoute: AppTaxRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  AppRoute: AppRouteWithChildren,
   ContactRoute: ContactRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   HelpRoute: HelpRoute,
   HowItWorksRoute: HowItWorksRoute,
   NewsRoute: NewsRoute,
   PricingRoute: PricingRoute,
   SecurityRoute: SecurityRoute,
+  SigninRoute: SigninRoute,
+  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

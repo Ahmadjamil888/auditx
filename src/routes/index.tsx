@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
   ArrowRightCircle,
@@ -18,6 +18,7 @@ import heroBg from "@/assets/hero-bg.jpg";
 import { Btn, Container, Panel, Reveal, SectionHead, StatusPill, reveal } from "@/components/kit";
 import { Footer } from "@/components/site/Footer";
 import { Navbar } from "@/components/site/Navbar";
+import { useAuth } from "@/lib/auth-context";
 import {
   Accordion,
   AccordionContent,
@@ -28,18 +29,18 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "AuditX — Audit-Grade Trade Reconciliation & Tax Clarity" },
+      { title: "AuditX — AI Trade Reconciliation & CGT Calculator for PSX and NSE" },
       {
         name: "description",
         content:
-          "AuditX turns messy PSX and NSE trade slips into a reconciled, audit-ready ledger with deterministic FIFO capital-gains math.",
+          "Upload your PSX or NSE broker slips. AuditX's AI extracts every field, FIFO math computes your capital gains tax, and an immutable audit trail keeps you filing-ready. Free for 50 transactions/month.",
       },
-      { property: "og:title", content: "AuditX — Audit-Grade Trade Reconciliation" },
-      {
-        property: "og:description",
-        content:
-          "AI extraction, deterministic tax math, immutable hash-chained audit logs for regional exchange traders.",
-      },
+      { name: "keywords", content: "PSX CGT calculator, NSE STCG LTCG, trade reconciliation, broker slip parser, capital gains tax Pakistan India, FIFO tax engine, AuditX" },
+      { property: "og:title",       content: "AuditX — AI Trade Reconciliation & CGT Calculator for PSX and NSE" },
+      { property: "og:description", content: "Stop spending weekends on spreadsheets. AuditX reconciles your PSX and NSE trades in minutes with deterministic FIFO tax math and Gemini AI extraction." },
+      { property: "og:url",         content: "https://auditx.app/" },
+      { name: "twitter:title",      content: "AuditX — AI Trade Reconciliation & CGT Calculator" },
+      { name: "twitter:description", content: "Upload your PSX/NSE broker slips. Gemini AI + deterministic FIFO = audit-ready ledger in minutes." },
     ],
   }),
   component: Home,
@@ -174,6 +175,10 @@ const faqs = [
 ];
 
 function Home() {
+  const { session, loading } = useAuth();
+  // While auth state is resolving, default to the unauthenticated CTA
+  const ctaTo = (!loading && session) ? "/app/overview" : "/signup";
+
   return (
     <div style={{ fontFamily: "var(--font-body)", color: "var(--color-text)" }}>
       {/* HERO */}
@@ -222,26 +227,28 @@ function Home() {
                 reconciled, audit-ready book with real-time capital gains and compliance tracking.
               </motion.p>
               <motion.div variants={reveal} custom={2} initial="hidden" animate="visible">
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.04, filter: "brightness(1.1)" }}
-                  whileTap={{ scale: 0.96 }}
-                  className="mt-8 flex items-center justify-between gap-8"
-                  style={{
-                    background: "var(--color-accent)",
-                    color: "#fff",
-                    borderRadius: 50,
-                    padding: "17px 24px",
-                    fontFamily: "var(--font-body)",
-                    fontWeight: 600,
-                    fontSize: "clamp(0.9rem, 2vw, 1rem)",
-                    boxShadow: "0 4px 24px rgba(115,66,226,0.28)",
-                    minWidth: 210,
-                  }}
-                >
-                  Start Free Audit
-                  <ArrowRightCircle size={20} strokeWidth={1.75} />
-                </motion.button>
+                <Link to={ctaTo}>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.04, filter: "brightness(1.1)" }}
+                    whileTap={{ scale: 0.96 }}
+                    className="mt-8 flex items-center justify-between gap-8"
+                    style={{
+                      background: "var(--color-accent)",
+                      color: "#fff",
+                      borderRadius: 50,
+                      padding: "17px 24px",
+                      fontFamily: "var(--font-body)",
+                      fontWeight: 600,
+                      fontSize: "clamp(0.9rem, 2vw, 1rem)",
+                      boxShadow: "0 4px 24px rgba(115,66,226,0.28)",
+                      minWidth: 210,
+                    }}
+                  >
+                    {session ? "Go to Dashboard" : "Start Free Audit"}
+                    <ArrowRightCircle size={20} strokeWidth={1.75} />
+                  </motion.button>
+                </Link>
               </motion.div>
             </div>
           </Container>
@@ -530,9 +537,11 @@ function Home() {
                       </li>
                     ))}
                   </ul>
-                  <Btn className="mt-7 w-full" variant={t.popular ? "primary" : "secondary"}>
-                    {t.name === "Enterprise" ? "Contact sales" : "Start Free Audit"}
-                  </Btn>
+                  <Link to={t.name === "Enterprise" ? "/contact" : ctaTo}>
+                    <Btn className="mt-7 w-full" variant={t.popular ? "primary" : "secondary"}>
+                      {t.name === "Enterprise" ? "Contact sales" : session ? "Go to Dashboard" : "Start Free Audit"}
+                    </Btn>
+                  </Link>
                 </Panel>
               </Reveal>
             ))}
@@ -571,9 +580,12 @@ function Home() {
             Parse your first 50 transactions free. No card, no broker credentials.
           </p>
           <div className="mt-8 flex justify-center">
-            <Btn variant="inverse" className="px-7 py-3.5">
-              <Wallet size={18} strokeWidth={1.75} /> Start Free Audit
-            </Btn>
+            <Link to={ctaTo}>
+              <Btn variant="inverse" className="px-7 py-3.5">
+                <Wallet size={18} strokeWidth={1.75} />
+                {session ? "Go to Dashboard" : "Start Free Audit"}
+              </Btn>
+            </Link>
           </div>
         </Container>
       </section>

@@ -1,0 +1,57 @@
+{
+  "name": "AuditX — AI-Native Trade Reconciliation",
+  "short_name": "AuditX",
+  "description": "AI-powered financial audit and CGT compliance for PSX and NSE traders.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F2EE",
+  "theme_color": "#7342E2",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "productivity", "business"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "type": "image/x-icon",
+      "sizes": "48x48"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "AuditX Dashboard — Portfolio Overview"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AuditX Mobile — Ledger View"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Upload Statement",
+      "short_name": "Upload",
+      "description": "Parse a new trade confirmation",
+      "url": "/app/parser",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Tax Center",
+      "short_name": "Tax",
+      "description": "View your CGT computation",
+      "url": "/app/tax",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}

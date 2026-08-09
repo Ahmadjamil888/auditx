@@ -1,20 +1,24 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { Btn, Container } from "@/components/kit";
+import { useAuth } from "@/lib/auth-context";
 
 const links = [
-  { label: "Product", to: "/how-it-works" },
-  { label: "Pricing", to: "/pricing" },
-  { label: "Security", to: "/security" },
-  { label: "News", to: "/news" },
-  { label: "Help", to: "/help" },
+  { label: "Product",      to: "/how-it-works" },
+  { label: "Pricing",      to: "/pricing" },
+  { label: "Security",     to: "/security" },
+  { label: "News",         to: "/news" },
+  { label: "Help",         to: "/help" },
 ] as const;
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const { session, loading } = useAuth();
+  const nav = useNavigate();
+  const isLoggedIn = !loading && !!session;
 
   return (
     <>
@@ -36,8 +40,14 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Btn>Start Free Audit</Btn>
-          <Btn variant="secondary">Sign In</Btn>
+          <Btn onClick={() => nav({ to: isLoggedIn ? "/app/overview" : "/signup" })}>
+            {isLoggedIn ? "Dashboard" : "Start Free Audit"}
+          </Btn>
+          {!isLoggedIn && (
+            <Btn variant="secondary" onClick={() => nav({ to: "/signin" })}>
+              Sign In
+            </Btn>
+          )}
         </div>
 
         <button
@@ -100,10 +110,17 @@ export function Navbar() {
                 ))}
               </nav>
               <div className="mt-auto flex flex-col gap-2">
-                <Btn className="w-full">Start Free Audit</Btn>
-                <Btn variant="secondary" className="w-full">
-                  Sign In
+                <Btn
+                  className="w-full"
+                  onClick={() => { setOpen(false); nav({ to: isLoggedIn ? "/app/overview" : "/signup" }); }}
+                >
+                  {isLoggedIn ? "Dashboard" : "Start Free Audit"}
                 </Btn>
+                {!isLoggedIn && (
+                  <Btn variant="secondary" className="w-full" onClick={() => { setOpen(false); nav({ to: "/signin" }); }}>
+                    Sign In
+                  </Btn>
+                )}
               </div>
             </motion.aside>
           </>

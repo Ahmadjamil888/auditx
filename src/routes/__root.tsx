@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/lib/auth-context";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -78,26 +79,69 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "AuditX — Audit-Grade Trade Reconciliation" },
+
+      // ── Primary SEO ──────────────────────────────────────────────────────
+      { title: "AuditX — AI-Native Financial Audit & Compliance for PSX, NSE Traders" },
       {
         name: "description",
         content:
-          "AuditX turns messy trade slips into a reconciled, audit-ready ledger with real-time capital gains tracking.",
+          "AuditX is an AI-powered trade reconciliation and CGT tax engine for PSX (Pakistan) and NSE (India) traders. Upload broker slips, get a FIFO-accurate, audit-ready ledger in minutes. Free for 50 transactions/month.",
       },
-      { name: "author", content: "AuditX" },
-      { property: "og:title", content: "AuditX — Audit-Grade Trade Reconciliation" },
+      { name: "keywords",
+        content:
+          "PSX tax calculator, NSE CGT calculator, Pakistan capital gains tax, FIFO trade reconciliation, broker slip parser, AI financial audit, portfolio ledger PSX, WHT calculator Pakistan, NSE STCG LTCG, trade confirmation parser, AuditX",
+      },
+      { name: "author",       content: "AuditX" },
+      { name: "robots",       content: "index, follow" },
+      { name: "googlebot",    content: "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" },
+      { name: "theme-color",  content: "#7342E2" },
+      { name: "rating",       content: "general" },
+      { name: "revisit-after", content: "7 days" },
+      { name: "language",     content: "English" },
+
+      // ── Open Graph ───────────────────────────────────────────────────────
+      { property: "og:type",         content: "website" },
+      { property: "og:url",          content: "https://auditx.app/" },
+      { property: "og:site_name",    content: "AuditX" },
+      { property: "og:title",        content: "AuditX — AI-Native Trade Reconciliation & CGT Engine for PSX & NSE" },
       {
         property: "og:description",
-        content: "Reconcile every trade with audit-grade precision.",
+        content:
+          "Replace hours of manual ledger work with AuditX. Upload any PSX or NSE broker slip — Gemini AI extracts every field, FIFO math computes your CGT, and an immutable audit trail keeps you filing-ready.",
       },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image",        content: "https://auditx.app/og-image.png" },
+      { property: "og:image:width",  content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt",    content: "AuditX dashboard showing portfolio reconciliation and tax computation" },
+      { property: "og:locale",       content: "en_US" },
+
+      // ── Twitter / X ──────────────────────────────────────────────────────
+      { name: "twitter:card",        content: "summary_large_image" },
+      { name: "twitter:site",        content: "@auditxapp" },
+      { name: "twitter:creator",     content: "@auditxapp" },
+      { name: "twitter:title",       content: "AuditX — AI-Native Trade Reconciliation & CGT Engine" },
+      {
+        name: "twitter:description",
+        content:
+          "Upload your PSX/NSE broker slips. Gemini AI extracts the data, FIFO math computes your capital gains tax, and an immutable audit trail keeps you filing-ready.",
+      },
+      { name: "twitter:image",       content: "https://auditx.app/og-image.png" },
+      { name: "twitter:image:alt",   content: "AuditX — AI-powered trade reconciliation dashboard" },
+
+      // ── App / Mobile ─────────────────────────────────────────────────────
+      { name: "application-name",          content: "AuditX" },
+      { name: "apple-mobile-web-app-title", content: "AuditX" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "mobile-web-app-capable",    content: "yes" },
+      { name: "msapplication-TileColor",   content: "#7342E2" },
+      { name: "msapplication-config",      content: "/browserconfig.xml" },
+
+      // ── Structured Data hint ─────────────────────────────────────────────
+      { name: "category", content: "Finance, Tax, Accounting, Trading" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -108,7 +152,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://db.onlinewebfonts.com/c/04e6981992c0e2e7642af2074ebe3901?family=Helvetica+Now+Display+Bold",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon",             href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon",             href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "canonical",        href: "https://auditx.app/" },
+      { rel: "manifest",         href: "/site.webmanifest" },
     ],
   }),
 
@@ -119,10 +166,118 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://auditx.app/#app",
+        "name": "AuditX",
+        "url": "https://auditx.app",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "description":
+          "AI-native financial audit and compliance agent for PSX and NSE traders. Multimodal document parsing, FIFO CGT computation, and immutable audit trails.",
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Free",
+            "price": "0",
+            "priceCurrency": "USD",
+            "description": "50 transactions/month, CSV export"
+          },
+          {
+            "@type": "Offer",
+            "name": "Pro",
+            "price": "9.99",
+            "priceCurrency": "USD",
+            "billingIncrement": "P1M",
+            "description": "Unlimited transactions, PDF reports, anomaly detection"
+          },
+          {
+            "@type": "Offer",
+            "name": "Enterprise",
+            "price": "49",
+            "priceCurrency": "USD",
+            "billingIncrement": "P1M",
+            "description": "Multi-client, team roles, API access"
+          }
+        ],
+        "featureList": [
+          "Multimodal trade confirmation parser (PDF, image, CSV)",
+          "FIFO capital gains tax computation for PSX and NSE",
+          "Immutable hash-chained audit log",
+          "AI anomaly detection and reconciliation",
+          "Tax-loss harvesting suggestions",
+          "Google OAuth and email authentication",
+          "Multi-tenant row-level security"
+        ],
+        "screenshot": "https://auditx.app/og-image.png"
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://auditx.app/#org",
+        "name": "AuditX",
+        "url": "https://auditx.app",
+        "logo": "https://auditx.app/favicon.svg",
+        "sameAs": [
+          "https://twitter.com/auditxapp",
+          "https://linkedin.com/company/auditx"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://auditx.app/#website",
+        "url": "https://auditx.app",
+        "name": "AuditX",
+        "description": "AI-Native Financial Audit & Compliance for PSX and NSE Traders",
+        "publisher": { "@id": "https://auditx.app/#org" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": { "@type": "EntryPoint", "urlTemplate": "https://auditx.app/?q={search_term_string}" },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is AuditX?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AuditX is an AI-native financial audit and compliance agent for retail traders and micro-brokerages trading on PSX (Pakistan Stock Exchange) and NSE (India National Stock Exchange). It parses broker trade confirmations and computes capital gains tax automatically."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does AuditX compute capital gains tax?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AuditX uses a deterministic FIFO (First In, First Out) lot-matching engine written in TypeScript. The AI model never computes numbers — it only extracts data from documents. Tax math is 100% code-based and auditable."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which stock exchanges does AuditX support?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AuditX currently supports PSX (Pakistan) with CGT slabs and Filer/Non-Filer WHT rates, and NSE (India) with STCG/LTCG rules per the 2024 Union Budget. More jurisdictions are coming."
+            }
+          }
+        ]
+      }
+    ]
+  });
+
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLd }}
+        />
       </head>
       <body>
         {children}
@@ -137,9 +292,11 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster position="bottom-right" />
+      <AuthProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        <Toaster position="bottom-right" />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
