@@ -27,7 +27,7 @@ function ConfidenceBadge({ score }: { score: number }) {
 }
 
 function ActionBadge({ action }: { action: TxAction }) {
-  const map: Record<TxAction, { tone: "ok" | "bad" | "info"; label: string }> = {
+  const map: Record<TxAction, { tone: "ok" | "bad" | "info" | "warn"; label: string }> = {
     BUY: { tone: "info", label: "BUY" },
     SELL: { tone: "ok", label: "SELL" },
     DIV: { tone: "warn", label: "DIV" },

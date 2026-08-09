@@ -14,16 +14,16 @@ export interface ExtractedField {
 
 export interface ParsedStatement {
   fields: ExtractedField[];
-  transaction_date?: string;
-  ticker?: string;
-  action?: "BUY" | "SELL" | "DIV";
-  quantity?: number;
-  price?: number;
-  fees?: number;
-  wht?: number;
-  ref_id?: string;
-  broker?: string;
-  exchange?: string;
+  transaction_date?: string | undefined;
+  ticker?: string | undefined;
+  action?: "BUY" | "SELL" | "DIV" | undefined;
+  quantity?: number | undefined;
+  price?: number | undefined;
+  fees?: number | undefined;
+  wht?: number | undefined;
+  ref_id?: string | undefined;
+  broker?: string | undefined;
+  exchange?: string | undefined;
   overall_confidence: number;
   needs_review: boolean;
 }
@@ -43,7 +43,7 @@ export interface TaxExplanation {
 // ── Client factory ────────────────────────────────────────────────────────────
 
 function getClient(): GoogleGenAI {
-  const key = (import.meta.env.VITE_GOOGLE_AI_API_KEY as string | undefined) ?? "";
+  const key = (import.meta.env['VITE_GOOGLE_AI_API_KEY'] as string | undefined) ?? "";
   if (!key || key.length < 10) {
     throw new Error(
       "Google AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file. " +
@@ -90,14 +90,17 @@ Return ONLY the JSON object — nothing else.`;
 
 // ── Parse JSON safely, stripping any accidental markdown fences ───────────────
 
-function safeParseJSON(raw: string): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LooseJSON = any;
+
+function safeParseJSON(raw: string): LooseJSON {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  return JSON.parse(cleaned) as Record<string, unknown>;
+  return JSON.parse(cleaned) as LooseJSON;
 }
 
 // ── Build extracted fields array ──────────────────────────────────────────────
 
-function buildFields(parsed: Record<string, unknown>, confidences: Record<string, number>): ExtractedField[] {
+function buildFields(parsed: LooseJSON, confidences: Record<string, number>): ExtractedField[] {
   return [
     { field: "Transaction Date",  value: String(parsed.transaction_date ?? ""), confidence: confidences.transaction_date ?? 0.5 },
     { field: "Ticker Symbol",     value: String(parsed.ticker ?? ""),           confidence: confidences.ticker           ?? 0.5 },
@@ -112,7 +115,7 @@ function buildFields(parsed: Record<string, unknown>, confidences: Record<string
   ];
 }
 
-function toStatement(parsed: Record<string, unknown>, fields: ExtractedField[]): ParsedStatement {
+function toStatement(parsed: LooseJSON, fields: ExtractedField[]): ParsedStatement {
   const overall_confidence = fields.reduce((s, f) => s + f.confidence, 0) / fields.length;
   return {
     fields,
@@ -161,7 +164,7 @@ export async function parseDocument(
 
   const text = response.text ?? "";
   const parsed = safeParseJSON(text);
-  const confidences = (parsed.field_confidences as Record<string, number>) ?? {};
+  const confidences = (parsed['field_confidences'] as Record<string, number>) ?? {};
   return toStatement(parsed, buildFields(parsed, confidences));
 }
 
@@ -195,7 +198,7 @@ export async function parseTextDocument(
 
   const text = response.text ?? "";
   const parsed = safeParseJSON(text);
-  const confidences = (parsed.field_confidences as Record<string, number>) ?? {};
+  const confidences = (parsed['field_confidences'] as Record<string, number>) ?? {};
   return toStatement(parsed, buildFields(parsed, confidences));
 }
 

@@ -111,14 +111,16 @@ const semantic = {
 export function StatusPill({
   tone = "ok",
   children,
+  className = "",
 }: {
   tone?: keyof typeof semantic;
   children: ReactNode;
+  className?: string;
 }) {
   const c = semantic[tone];
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${className}`}
       style={{ color: c, background: `color-mix(in srgb, ${c} 10%, transparent)` }}
     >
       <span className="size-1.5 rounded-full" style={{ background: c }} />

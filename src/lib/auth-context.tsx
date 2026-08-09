@@ -49,19 +49,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error || !data) return;
 
-      const org = Array.isArray(data.organizations)
-        ? data.organizations[0]
-        : (data.organizations as { name: string; jurisdiction_default: string } | null);
+      const row = data as unknown as {
+        org_id: string;
+        full_name: string;
+        role: "owner" | "admin" | "analyst" | "viewer";
+        organizations: { name: string; jurisdiction_default: string } | { name: string; jurisdiction_default: string }[] | null;
+        subscriptions: { plan: string } | { plan: string }[] | null;
+      };
 
-      const sub = Array.isArray(data.subscriptions)
-        ? data.subscriptions[0]
-        : (data.subscriptions as { plan: string } | null);
+      const org = Array.isArray(row.organizations)
+        ? row.organizations[0]
+        : (row.organizations as { name: string; jurisdiction_default: string } | null);
+
+      const sub = Array.isArray(row.subscriptions)
+        ? row.subscriptions[0]
+        : (row.subscriptions as { plan: string } | null);
 
       setProfile({
-        org_id: data.org_id,
+        org_id: row.org_id,
         org_name: org?.name ?? "My Organisation",
-        full_name: data.full_name,
-        role: data.role,
+        full_name: row.full_name,
+        role: row.role,
         jurisdiction: org?.jurisdiction_default ?? "PSX",
         plan: (sub?.plan ?? "free") as "free" | "pro" | "enterprise",
       });

@@ -299,7 +299,7 @@ function Parser() {
   const lowConf   = fields.filter((f) => f.confidence < 0.75);
   const canPost   = fields.length > 0 && step === "ready" && !posted && !posting;
   const stepOrder: ParseStep[] = ["uploading", "extracting", "validating", "ready"];
-  const apiKeyMissing = !import.meta.env.VITE_GOOGLE_AI_API_KEY;
+  const apiKeyMissing = !import.meta.env['VITE_GOOGLE_AI_API_KEY'];
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
