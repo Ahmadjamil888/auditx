@@ -1,451 +1,770 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertCircle, FileSearch, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { AgentActivity } from "@/components/agent/AgentActivity";
-import { AIMessage } from "@/components/agent/AIMessage";
-import { AttachmentChip, ChatComposer } from "@/components/agent/ChatComposer";
-import { ExtractedFieldsCard } from "@/components/agent/ExtractedFieldsCard";
-import { Logo } from "@/components/brand/Logo";
 import {
-  fileToAttachment,
-  runAgent,
-  textToAttachment,
-  type AgentAttachment,
-  type AgentStep,
-} from "@/lib/agent-service";
+  AlertCircle, CheckCircle2, ChevronDown,
+  Loader2, Paperclip, RefreshCw, Send, StopCircle, Upload, X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Panel, StatusPill } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
+import { GoogleGenAI } from "@google/genai";
+import { TOOL_DECLARATIONS, executeTool, type ToolContext, type ToolResult } from "@/lib/agent-tools";
+import { parseDocument, parseTextDocument, type ExtractedField } from "@/lib/ai-service";
 
 export const Route = createFileRoute("/app/parser")({
-  component: ParserWorkspace,
-  head: () => ({
-    meta: [
-      { title: "AI Audit Workspace · AuditX" },
-      {
-        name: "description",
-        content:
-          "Upload broker slips, contract notes or dividend vouchers and ask AuditX to extract, reconcile and compute tax on your trades.",
-      },
-      { property: "og:title", content: "AI Audit Workspace · AuditX" },
-      {
-        property: "og:description",
-        content: "Chat with an AI audit agent over your own broker documents.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  component: Parser,
 });
 
-// ── Sample slips (kept as one-click context) ─────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const SAMPLE_SLIPS = [
-  {
-    label: "PSX Broker Slip",
-    desc: "Meridian Capital · OGDC BUY",
-    text: `MERIDIAN CAPITAL (PVT) LTD
-TRADE CONFIRMATION
-Date: 28-Aug-2025
-Ref: PSX-8821-K
-
-TRANSACTION DETAILS:
-Symbol: OGDC
-Action: BUY
-Quantity: 500 shares
-Rate: PKR 104.50 per share
-Gross Value: PKR 52,250.00
-
-CHARGES:
-Brokerage: PKR 1,044.00 (2%)
-CDC Charges: PKR 150.00
-SECP Levy: PKR 130.63
-Total Fees: PKR 1,324.63
-
-Settlement Date: 30-Aug-2025
-Exchange: PSX`,
-  },
-  {
-    label: "NSE Contract Note",
-    desc: "Nifty Desk · TCS SELL",
-    text: `NIFTY DESK SECURITIES LTD
-CONTRACT NOTE
-Date: 28/08/2025
-Order Ref: NSE-55421
-
-TRADE DETAILS:
-Scrip: TCS
-Exchange: NSE
-Trade Type: SELL
-Qty: 25
-Rate: INR 4,280.00
-Gross: INR 1,07,000.00
-
-DEDUCTIONS:
-Brokerage: INR 535.00
-STT: INR 107.00
-Total Charges: INR 751.30
-
-Net Receivable: INR 1,06,248.70`,
-  },
-  {
-    label: "Dividend Voucher",
-    desc: "MCB Bank · Dividend",
-    text: `MCB BANK LIMITED
-DIVIDEND PAYMENT ADVICE
-FY 2025 — Final Dividend
-
-Shares Held: 1,000
-Dividend Rate: PKR 4.50 per share
-Gross Dividend: PKR 4,500.00
-WHT Deducted (10% Filer): PKR 450.00
-Net Amount: PKR 4,050.00
-
-Payment Date: 25-Aug-2025
-Exchange: PSX`,
-  },
-];
-
-const SUGGESTIONS = [
-  "Extract every field and flag anything low-confidence",
-  "Compute my capital gains tax on this trade",
-  "Reconcile this slip against my ledger",
-  "Summarise the fees and withholding deducted",
-];
-
-// ── Message model ─────────────────────────────────────────────────────────────
-
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  attachments: AgentAttachment[];
-  steps: AgentStep[];
-  running: boolean;
-  error?: string;
-};
-
-function uid() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+interface Attachment {
+  id: string; name: string; mimeType: string; base64?: string; text?: string;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+interface ToolCall {
+  id: string; name: string; args: Record<string, unknown>;
+  status: "pending" | "confirmed" | "executed" | "rejected";
+  result?: ToolResult;
+}
 
-function ParserWorkspace() {
-  const { profile } = useAuth();
+interface ChatMessage {
+  role: "user" | "ai";
+  text: string;
+  attachments?: Attachment[];
+  streaming?: boolean;
+  fields?: ExtractedField[];
+  fileName?: string;
+  toolCalls?: ToolCall[];
+}
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [pending, setPending] = useState<AgentAttachment[]>([]);
-  const [context, setContext] = useState<AgentAttachment[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const started = messages.length > 0;
-  const apiKeyMissing = !import.meta.env["VITE_GOOGLE_AI_API_KEY"];
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+async function toAttachment(file: File): Promise<Attachment> {
+  const isText = file.type.includes("text") || file.type.includes("csv")
+    || file.name.endsWith(".csv") || file.name.endsWith(".txt");
+  const id = `${file.name}-${Date.now()}`;
+  if (isText) return { id, name: file.name, mimeType: "text/plain", text: await file.text() };
+  const mimeType = (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))
+    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    : file.type || "application/pdf";
+  return { id, name: file.name, mimeType, base64: await fileToBase64(file) };
+}
 
-  async function handleAddFiles(files: FileList | null) {
-    if (!files?.length) return;
-    const added = await Promise.all(Array.from(files).map(fileToAttachment));
-    setPending((p) => [...p, ...added]);
+function getAI(): GoogleGenAI {
+  const key = (import.meta.env.VITE_GOOGLE_AI_API_KEY as string | undefined) ?? "";
+  if (!key || key.length < 10) throw new Error("VITE_GOOGLE_AI_API_KEY not set in .env");
+  return new GoogleGenAI({ apiKey: key });
+}
+
+// Strip markdown bold/italic markers from AI text output
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/^#{1,3}\s+/gm, "")
+    .replace(/^[-•]\s/gm, "• ")
+    .trim();
+}
+
+// ── System prompt ─────────────────────────────────────────────────────────────
+
+const SYSTEM = `You are AuditX, a financial audit AI for PSX (Pakistan) and NSE (India) traders.
+
+You have access to tools that let you READ and WRITE the user's actual ledger in Supabase.
+
+RULES:
+- Never use **bold** or *italic* markers. Write plain text only.
+- Never use ## or ### headings. Just write naturally.
+- When given a document, extract fields and call insert_transaction to save them — don't just describe them.
+- Before inserting, briefly state what you found: ticker, action, qty, price, fees. Then call the tool.
+- When asked about their trades, call get_transactions first, then answer from real data.
+- When you spot a fee discrepancy or WHT mismatch, call flag_anomaly to record it.
+- Always confirm what tool you called and what happened.
+- Be concise. No numbered lists of questions. If you need a value, ask for one specific thing.
+- After inserting a transaction, tell the user it's in the ledger and ask what they want to do next.`;
+
+// ── Confidence badge ──────────────────────────────────────────────────────────
+
+function ConfidenceBadge({ score }: { score: number }) {
+  const tone = score >= 0.9 ? "ok" : score >= 0.75 ? "warn" : "bad";
+  return <StatusPill tone={tone}>{score.toFixed(2)}</StatusPill>;
+}
+
+// ── Extracted fields card (collapsible, editable) ─────────────────────────────
+
+function FieldsCard({
+  fileName, fields, onPost,
+}: { fileName: string; fields: ExtractedField[]; onPost: (edited: Record<string, string>) => void }) {
+  const [open, setOpen] = useState(true);
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [posted, setPosted] = useState(false);
+  const lowConf = fields.filter((f) => f.confidence < 0.75);
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white mt-3" style={{ border: "1px solid var(--hairline)" }}>
+      <button type="button" onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2 px-4 py-3">
+        <span className="truncate text-sm font-semibold">Extracted — {fileName}</span>
+        <span className="ml-auto flex items-center gap-2">
+          {lowConf.length > 0
+            ? <StatusPill tone="warn">{lowConf.length} low confidence</StatusPill>
+            : <StatusPill tone="ok">Verified</StatusPill>}
+          <ChevronDown size={14} strokeWidth={2} style={{ color: "var(--ink-3)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+        </span>
+      </button>
+      {open && (
+        <div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr style={{ borderTop: "1px solid var(--hairline)", background: "var(--color-login-bg)" }}>
+                  {["Field", "Value", "Confidence"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: "var(--ink-2)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((f, i) => (
+                  <motion.tr key={f.field} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.25) }}
+                    style={{ borderTop: "1px solid var(--hairline)", background: f.confidence < 0.75 ? "rgba(214,69,69,0.04)" : "transparent" }}>
+                    <td className="px-4 py-2.5 text-xs font-medium whitespace-nowrap" style={{ color: "var(--ink-2)" }}>{f.field}</td>
+                    <td className="px-4 py-2">
+                      <input type="text" value={edited[f.field] ?? f.value}
+                        onChange={(e) => setEdited((p) => ({ ...p, [f.field]: e.target.value }))}
+                        disabled={posted}
+                        className="w-full rounded-lg border bg-transparent px-2 py-1 text-sm outline-none focus:bg-white focus:ring-2"
+                        style={{ borderColor: "transparent", ["--tw-ring-color" as string]: "var(--color-accent)" }} />
+                    </td>
+                    <td className="px-4 py-2.5"><ConfidenceBadge score={f.confidence} /></td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3" style={{ borderTop: "1px solid var(--hairline)" }}>
+            {posted ? (
+              <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--ok)" }}>
+                <CheckCircle2 size={16} strokeWidth={1.75} /> Posted to ledger
+              </span>
+            ) : (
+              <button type="button" onClick={() => { onPost(edited); setPosted(true); }}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white"
+                style={{ background: "var(--color-accent)", boxShadow: "0 4px 24px rgba(115,66,226,0.28)" }}>
+                <CheckCircle2 size={14} strokeWidth={2} /> Post to Ledger
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tool confirmation card ────────────────────────────────────────────────────
+
+function ToolCard({ tc, onConfirm, onReject }: {
+  tc: ToolCall;
+  onConfirm: () => void;
+  onReject: () => void;
+}) {
+  const labels: Record<string, string> = {
+    insert_transaction: "Add transaction to ledger",
+    update_transaction: "Update transaction",
+    flag_anomaly:       "Flag discrepancy",
+    resolve_flag:       "Resolve flag",
+    get_transactions:   "Read ledger",
+    get_ledger_summary: "Read ledger summary",
+  };
+
+  const isRead = tc.name === "get_transactions" || tc.name === "get_ledger_summary";
+
+  if (tc.status === "executed") {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
+        style={{ background: "rgba(31,157,99,0.08)", color: "var(--ok)" }}>
+        <CheckCircle2 size={13} strokeWidth={2} />
+        {labels[tc.name] ?? tc.name} — done
+      </div>
+    );
+  }
+  if (tc.status === "confirmed") {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
+        style={{ background: "rgba(115,66,226,0.08)", color: "var(--color-accent)" }}>
+        <Loader2 size={13} strokeWidth={2} className="animate-spin" />
+        Executing {labels[tc.name] ?? tc.name}...
+      </div>
+    );
+  }
+  if (tc.status === "rejected") {
+    const error = tc.result?.error;
+    return (
+      <div className="mt-2 rounded-xl px-3 py-2 text-xs"
+        style={{ background: "rgba(214,69,69,0.06)", color: "var(--bad)" }}>
+        <div className="flex items-center gap-2">
+          <X size={13} strokeWidth={2} />
+          <span>Failed — {error || "Operation cancelled"}</span>
+        </div>
+      </div>
+    );
+  }
+  if (tc.status === "pending" && isRead) {
+    // Read tools auto-execute — no confirmation needed
+    return null;
   }
 
-  function addSample(label: string, text: string) {
-    setPending((p) => [...p, textToAttachment(`${label}.txt`, text)]);
+  return (
+    <div className="mt-2 overflow-hidden rounded-xl" style={{ border: "1px solid var(--hairline)", background: "#fff" }}>
+      <div className="flex items-center justify-between px-4 py-2.5"
+        style={{ background: "rgba(115,66,226,0.04)", borderBottom: "1px solid var(--hairline)" }}>
+        <span className="text-xs font-semibold" style={{ color: "var(--color-accent)" }}>
+          Proposed action: {labels[tc.name] ?? tc.name}
+        </span>
+      </div>
+      <pre className="overflow-x-auto px-4 py-3 text-xs" style={{ color: "var(--ink-2)" }}>
+        {JSON.stringify(tc.args, null, 2)}
+      </pre>
+      <div className="flex gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--hairline)" }}>
+        <button type="button" onClick={onConfirm}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+          style={{ background: "var(--color-accent)" }}>
+          <CheckCircle2 size={12} strokeWidth={2} /> Apply
+        </button>
+        <button type="button" onClick={onReject}
+          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
+          style={{ borderColor: "var(--hairline)", color: "var(--ink-2)" }}>
+          <X size={12} strokeWidth={2} /> Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Streaming cursor ──────────────────────────────────────────────────────────
+
+function Cursor() {
+  return (
+    <motion.span className="inline-block w-0.5 h-3.5 ml-0.5 rounded-full align-middle"
+      style={{ background: "var(--color-accent)" }}
+      animate={{ opacity: [1, 0, 1] }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }} />
+  );
+}
+
+// ── Main Parser component ─────────────────────────────────────────────────────
+
+function Parser() {
+  const { profile, user } = useAuth();
+  const queryClient = useQueryClient();
+  const inputId = "parser-file-input";
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef  = useRef<AbortController | null>(null);
+  const [dragging,     setDragging]     = useState(false);
+  const [messages,     setMessages]     = useState<ChatMessage[]>([]);
+  const [input,        setInput]        = useState("");
+  const [attachments,  setAttachments]  = useState<Attachment[]>([]);
+  const [busy,         setBusy]         = useState(false);
+  const [parseStep,    setParseStep]    = useState<"idle"|"uploading"|"extracting"|"ready"|"error">("idle");
+  const [parseFile,    setParseFile]    = useState("");
+  const [parseFields,  setParseFields]  = useState<ExtractedField[]>([]);
+  const [parseErr,     setParseErr]     = useState("");
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // ── Tool context ────────────────────────────────────────────────────────────
+  const toolCtx: ToolContext | null = profile?.org_id ? {
+    orgId: profile.org_id,
+    userId: user?.id ?? "",
+    userEmail: user?.email ?? "user",
+    jurisdiction: profile.jurisdiction ?? "PSX",
+    invalidate: (keys) => { for (const k of keys) queryClient.invalidateQueries({ queryKey: k }); },
+  } : null;
+
+  // ── File handling ───────────────────────────────────────────────────────────
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) await runExtract(file);
+    e.target.value = "";
+  }
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) runExtract(file);
   }
 
-  function patch(id: string, next: Partial<ChatMessage>) {
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...next } : m)));
-  }
-
-  async function submit(overridePrompt?: string) {
-    const prompt = (overridePrompt ?? input).trim();
-    const newAttachments = pending;
-    if (busy || (!prompt && newAttachments.length === 0)) return;
-
-    const promptText =
-      prompt ||
-      "Extract every field from the attached document, flag anything low-confidence, and tell me what to do next.";
-
-    const userMsg: ChatMessage = {
-      id: uid(),
-      role: "user",
-      text: promptText,
-      attachments: newAttachments,
-      steps: [],
-      running: false,
-    };
-    const aiId = uid();
-    const aiMsg: ChatMessage = {
-      id: aiId,
-      role: "assistant",
-      text: "",
-      attachments: newAttachments,
-      steps: [],
-      running: true,
-    };
-
-    const history = messages
-      .filter((m) => m.text)
-      .map((m) => ({ role: m.role, text: m.text }));
-
-    setMessages((prev) => [...prev, userMsg, aiMsg]);
-    setInput("");
-    setPending([]);
-    setBusy(true);
-
-    const attachmentsForRun = [...context, ...newAttachments];
-
+  // ── Document extraction pipeline ────────────────────────────────────────────
+  async function runExtract(file: File) {
+    setParseStep("uploading"); setParseFile(file.name);
+    setParseFields([]); setParseErr("");
     try {
-      await runAgent({
-        prompt: promptText,
-        attachments: attachmentsForRun,
-        history,
-        jurisdiction: profile?.jurisdiction ?? "PSX",
-        onStep: (steps) => patch(aiId, { steps }),
-        onDelta: (full) => patch(aiId, { text: full }),
-        onFields: (attachmentId, fields) => {
-          setMessages((prev) =>
-            prev.map((m) => ({
-              ...m,
-              attachments: m.attachments.map((a) =>
-                a.id === attachmentId ? { ...a, fields } : a,
-              ),
-            })),
-          );
-        },
-      });
-      patch(aiId, { running: false });
-    } catch (e) {
-      patch(aiId, { running: false, error: (e as Error).message });
-    } finally {
-      setContext(attachmentsForRun);
-      setBusy(false);
+      setParseStep("extracting");
+      const att = await toAttachment(file);
+      const result = att.text
+        ? await parseTextDocument(att.text, file.name)
+        : await parseDocument(att.base64 ?? "", att.mimeType, file.name);
+      setParseFields(result.fields);
+      setParseStep("ready");
+      // Also add the file as an attachment to include in the next chat message
+      setAttachments((p) => [...p, att]);
+    } catch (err) {
+      setParseErr((err as Error).message);
+      setParseStep("error");
     }
   }
 
-  function resetChat() {
-    setMessages([]);
-    setContext([]);
-    setPending([]);
-    setInput("");
+  // ── Post extracted fields manually ─────────────────────────────────────────
+  async function handleManualPost(edited: Record<string, string>) {
+    if (!toolCtx) return;
+    const get = (name: string) => (edited[name] ?? parseFields.find((f) => f.field === name)?.value ?? "").trim();
+    await executeTool("insert_transaction", {
+      ticker: get("Ticker Symbol"), action: get("Action"),
+      quantity: parseFloat(get("Quantity").replace(/,/g, "")),
+      price:    parseFloat(get("Execution Price").replace(/[^\d.]/g, "")),
+      fees:     parseFloat(get("Commission / Fees").replace(/[^\d.]/g, "")) || 0,
+      wht:      parseFloat(get("WHT").replace(/[^\d.]/g, "")) || 0,
+      trade_date: get("Transaction Date"), ref_id: get("Reference ID"),
+      broker: get("Broker Name"), exchange: get("Exchange"),
+    }, toolCtx);
+    queryClient.invalidateQueries({ queryKey: ["transactions", profile?.org_id] });
   }
 
-  const composer = (
-    <ChatComposer
-      value={input}
-      onChange={setInput}
-      onSubmit={() => void submit()}
-      attachments={pending}
-      onAddFiles={(f) => void handleAddFiles(f)}
-      onRemoveAttachment={(id) => setPending((p) => p.filter((a) => a.id !== id))}
-      busy={busy}
-      disabled={apiKeyMissing}
-      placeholder={
-        started
-          ? "Ask a follow-up, or attach another document…"
-          : "Upload a broker slip and ask AuditX anything about it…"
+  // ── Chat submit with tool-calling ───────────────────────────────────────────
+  async function submit() {
+    if (busy) return;
+    const text = input.trim();
+    if (!text && attachments.length === 0) return;
+
+    const userMsg: ChatMessage = { role: "user", text, attachments: [...attachments] };
+    const history = [...messages];
+    setMessages((p) => [...p, userMsg, { role: "ai", text: "", streaming: true }]);
+    setInput(""); setAttachments([]); setBusy(true);
+    const aiIdx = history.length + 1;
+    abortRef.current = new AbortController();
+
+    try {
+      const ai = getAI();
+
+      // Build Gemini contents from history + new user turn
+      const contents: Array<{ role: "user" | "model"; parts: unknown[] }> = [];
+      for (const m of history) {
+        if (m.role === "user") {
+          const parts: unknown[] = [];
+          for (const a of m.attachments ?? []) {
+            if (a.base64) parts.push({ inlineData: { data: a.base64, mimeType: a.mimeType } });
+            else if (a.text) parts.push({ text: `[Document: ${a.name}]\n${a.text.slice(0, 8000)}` });
+          }
+          if (m.text) parts.push({ text: m.text });
+          if (parts.length) contents.push({ role: "user", parts });
+        } else if (m.text) {
+          contents.push({ role: "model", parts: [{ text: m.text }] });
+        }
       }
-    />
-  );
+      const userParts: unknown[] = [];
+      for (const a of userMsg.attachments ?? []) {
+        if (a.base64) userParts.push({ inlineData: { data: a.base64, mimeType: a.mimeType } });
+        else if (a.text) userParts.push({ text: `[Document: ${a.name}]\n${a.text.slice(0, 8000)}` });
+      }
+      if (text) userParts.push({ text });
+      if (userParts.length) contents.push({ role: "user", parts: userParts });
+
+      const models = ["gemini-2.5-flash", "gemini-2.5-pro"];
+      let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
+
+      for (let mi = 0; mi < models.length; mi++) {
+        try {
+          response = await ai.models.generateContent({
+            model: models[mi]!,
+            contents: contents as never,
+            config: {
+              systemInstruction: SYSTEM,
+              temperature: 0.35,
+              maxOutputTokens: 2048,
+              tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+            } as never,
+          });
+          break;
+        } catch (e) {
+          const msg = String((e as Error).message ?? "").toLowerCase();
+          const isQ = msg.includes("429") || msg.includes("quota") || msg.includes("resource_exhausted") || msg.includes("not_found") || msg.includes("404");
+          if (isQ && mi < models.length - 1) continue;
+          throw e;
+        }
+      }
+      if (!response) throw new Error("No AI response.");
+
+      const candidate = response.candidates?.[0];
+      const parts = candidate?.content?.parts ?? [];
+
+      // Collect text and function calls from response
+      let aiText = "";
+      const toolCalls: ToolCall[] = [];
+
+      for (const part of parts) {
+        if ("text" in part && part.text) {
+          aiText += stripMarkdown(part.text as string);
+        }
+        if ("functionCall" in part && part.functionCall) {
+          const fc = part.functionCall as { name: string; args: Record<string, unknown> };
+          toolCalls.push({
+            id: `tc-${Date.now()}-${Math.random()}`,
+            name: fc.name,
+            args: fc.args ?? {},
+            status: "pending",
+          });
+        }
+      }
+
+      // Update message with text + pending tool calls
+      setMessages((p) => p.map((m, i) =>
+        i === aiIdx ? { ...m, text: aiText, streaming: false, toolCalls } : m
+      ));
+
+      // Auto-execute read tools immediately; write tools need confirmation
+      if (toolCtx) {
+        const updated = [...toolCalls];
+        for (let ti = 0; ti < updated.length; ti++) {
+          const tc = updated[ti]!;
+          const isRead = tc.name === "get_transactions" || tc.name === "get_ledger_summary";
+          if (isRead) {
+            const result = await executeTool(tc.name, tc.args, toolCtx);
+            updated[ti] = { ...tc, status: "executed", result };
+            // Feed result back into a follow-up AI call
+            if (result.ok && result.data) {
+              const followUp = await ai.models.generateContent({
+                model: models[0]!,
+                contents: [
+                  ...contents,
+                  { role: "model", parts: [{ text: aiText || "I queried the ledger." }] },
+                  { role: "user", parts: [{ text: `Tool ${tc.name} returned: ${JSON.stringify(result.data, null, 2)}. Summarise what you found for the user in plain text, no bold or markdown.` }] },
+                ] as never,
+                config: { systemInstruction: SYSTEM, temperature: 0.3, maxOutputTokens: 1024 } as never,
+              });
+              const followText = stripMarkdown(followUp.candidates?.[0]?.content?.parts?.find((p: unknown) => "text" in (p as object))?.["text"] as string ?? "");
+              if (followText) {
+                setMessages((p) => p.map((m, i) =>
+                  i === aiIdx ? { ...m, text: (m.text ? m.text + "\n\n" : "") + followText, toolCalls: updated } : m
+                ));
+              }
+            }
+          }
+        }
+        setMessages((p) => p.map((m, i) => i === aiIdx ? { ...m, toolCalls: updated } : m));
+      }
+
+    } catch (e) {
+      const errMsg = (e as Error).message ?? "Something went wrong.";
+      setMessages((p) => p.map((m, i) => i === aiIdx ? { ...m, text: `⚠ ${errMsg}`, streaming: false } : m));
+    } finally {
+      setBusy(false); abortRef.current = null;
+    }
+  }
+
+  // ── Tool confirm / reject ───────────────────────────────────────────────────
+  async function confirmTool(msgIdx: number, tcIdx: number) {
+    if (!toolCtx) {
+      console.error("Tool context not available - user profile missing");
+      return;
+    }
+    const msg = messages[msgIdx];
+    if (!msg || msg.role !== "ai" || !msg.toolCalls) return;
+    const tc = msg.toolCalls[tcIdx];
+    if (!tc) return;
+
+    // Set to executing state first
+    setMessages((p) => p.map((m, i) => {
+      if (i !== msgIdx || m.role !== "ai") return m;
+      const tcs = (m.toolCalls ?? []).map((t, j) =>
+        j === tcIdx ? { ...t, status: "confirmed" as const } : t
+      );
+      return { ...m, toolCalls: tcs };
+    }));
+
+    try {
+      const result = await executeTool(tc.name, tc.args, toolCtx);
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Tool execution failed");
+      }
+
+      setMessages((p) => p.map((m, i) => {
+        if (i !== msgIdx || m.role !== "ai") return m;
+        const tcs = (m.toolCalls ?? []).map((t, j) =>
+          j === tcIdx ? { ...t, status: "executed" as const, result } : t
+        );
+        return { ...m, toolCalls: tcs };
+      }));
+
+      // Invalidate relevant queries based on tool type
+      if (tc.name === "insert_transaction" || tc.name === "update_transaction") {
+        queryClient.invalidateQueries({ queryKey: ["transactions", profile?.org_id] });
+      }
+      if (tc.name === "flag_anomaly" || tc.name === "resolve_flag") {
+        queryClient.invalidateQueries({ queryKey: ["reconciliation_flags", profile?.org_id] });
+      }
+    } catch (error) {
+      console.error("Tool execution error:", error);
+      setMessages((p) => p.map((m, i) => {
+        if (i !== msgIdx || m.role !== "ai") return m;
+        const tcs = (m.toolCalls ?? []).map((t, j) =>
+          j === tcIdx ? { 
+            ...t, 
+            status: "rejected" as const, 
+            result: { ok: false, error: (error as Error).message } 
+          } : t
+        );
+        return { ...m, toolCalls: tcs };
+      }));
+    }
+  }
+
+  function rejectTool(msgIdx: number, tcIdx: number) {
+    setMessages((p) => p.map((m, i) => {
+      if (i !== msgIdx || m.role !== "ai") return m;
+      const tcs = (m.toolCalls ?? []).map((t, j) =>
+        j === tcIdx ? { ...t, status: "rejected" as const } : t
+      );
+      return { ...m, toolCalls: tcs };
+    }));
+  }
+
+  function stop() {
+    abortRef.current?.abort(); setBusy(false);
+    setMessages((p) => p.map((m, i) => i === p.length - 1 && m.role === "ai" ? { ...m, streaming: false } : m));
+  }
+  function clearChat() {
+    if (busy) stop();
+    setMessages([]); setInput(""); setAttachments([]);
+    setParseStep("idle"); setParseFields([]); setParseErr("");
+  }
+
+  const apiKeyMissing = !import.meta.env.VITE_GOOGLE_AI_API_KEY;
+  const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Transcript */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
-          {!started ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="flex min-h-[60vh] flex-col justify-center"
-            >
-              <div className="mb-6 text-center">
-                <div className="mb-4 flex justify-center">
-                  <Logo />
-                </div>
-                <h1
-                  style={{ fontFamily: "var(--font-heading)", fontSize: "clamp(1.5rem,4vw,2rem)" }}
-                >
-                  What should I audit today?
-                </h1>
-                <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: "var(--ink-2)" }}>
-                  Attach a broker slip, contract note, dividend voucher, CSV or XLSX — then ask for
-                  extraction, reconciliation or a tax computation.
-                </p>
-              </div>
+    <div className="flex h-[calc(100dvh-56px)]" style={{ background: "var(--color-login-bg)" }}>
 
-              {apiKeyMissing && (
-                <div
-                  className="mb-4 flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm"
-                  style={{ background: "rgba(201,138,26,0.08)", border: "1px solid rgba(201,138,26,0.2)" }}
-                >
-                  <AlertCircle
-                    size={15}
-                    strokeWidth={1.75}
-                    style={{ color: "var(--warn)", flexShrink: 0, marginTop: 1 }}
-                  />
-                  <span style={{ color: "var(--ink-2)" }}>
-                    <strong>VITE_GOOGLE_AI_API_KEY</strong> is not set. Add it to <code>.env</code>{" "}
-                    to enable the AI agent.{" "}
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "var(--color-accent)" }}
-                    >
-                      Get a free key →
-                    </a>
-                  </span>
-                </div>
-              )}
+      {/* ── Left: upload + extraction ──────────────────────────────────────── */}
+      <div className="hidden w-80 shrink-0 flex-col border-r lg:flex" style={{ borderColor: "var(--hairline)", background: "#fff" }}>
+        <div className="border-b px-4 py-3" style={{ borderColor: "var(--hairline)" }}>
+          <p className="text-sm font-semibold">Statement Parser</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--ink-3)" }}>Upload a document to extract fields</p>
+        </div>
 
-              {composer}
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => void submit(s)}
-                    disabled={apiKeyMissing}
-                    className="rounded-full border bg-white px-3.5 py-1.5 text-xs transition-shadow hover:shadow-md disabled:opacity-50"
-                    style={{ borderColor: "var(--hairline)", color: "var(--ink-2)" }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-6">
-                <p
-                  className="mb-2 text-xs font-semibold tracking-wide uppercase"
-                  style={{ color: "var(--ink-3)" }}
-                >
-                  Or attach a sample slip
-                </p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {SAMPLE_SLIPS.map((s) => (
-                    <button
-                      key={s.label}
-                      type="button"
-                      onClick={() => addSample(s.label, s.text)}
-                      className="rounded-xl border bg-white px-3 py-2.5 text-left transition-shadow hover:shadow-md"
-                      style={{ borderColor: "var(--hairline)" }}
-                    >
-                      <p className="text-xs font-semibold">{s.label}</p>
-                      <p className="mt-0.5 text-xs" style={{ color: "var(--ink-3)" }}>
-                        {s.desc}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          ) : (
-            <div className="space-y-6 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-3)" }}>
-                  <FileSearch size={14} strokeWidth={1.75} />
-                  {context.length > 0
-                    ? `${context.length} document${context.length > 1 ? "s" : ""} in context`
-                    : "No documents in context"}
-                </div>
-                <button
-                  type="button"
-                  onClick={resetChat}
-                  disabled={busy}
-                  className="flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs font-medium transition-shadow hover:shadow-md disabled:opacity-50"
-                  style={{ borderColor: "var(--hairline)" }}
-                >
-                  <RefreshCw size={12} strokeWidth={2} /> New session
-                </button>
-              </div>
-
-              <AnimatePresence initial={false}>
-                {messages.map((m) =>
-                  m.role === "user" ? (
-                    <motion.div
-                      key={m.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col items-end gap-2"
-                    >
-                      {m.attachments.length > 0 && (
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {m.attachments.map((a) => (
-                            <AttachmentChip key={a.id} attachment={a} compact />
-                          ))}
-                        </div>
-                      )}
-                      <div
-                        className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm"
-                        style={{ background: "var(--color-accent)", color: "#fff" }}
-                      >
-                        {m.text}
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key={m.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="space-y-3"
-                    >
-                      <AgentActivity steps={m.steps} running={m.running} />
-
-                      {m.attachments
-                        .filter((a) => a.fields?.length)
-                        .map((a) => (
-                          <ExtractedFieldsCard
-                            key={a.id}
-                            fileName={a.name}
-                            fields={a.fields ?? []}
-                          />
-                        ))}
-
-                      {m.text && <AIMessage text={m.text} />}
-
-                      {m.running && !m.text && (
-                        <p className="text-sm" style={{ color: "var(--ink-3)" }}>
-                          Working through your document…
-                        </p>
-                      )}
-
-                      {m.error && (
-                        <div
-                          className="rounded-xl px-4 py-3 text-sm"
-                          style={{ background: "rgba(214,69,69,0.07)", color: "var(--bad)" }}
-                        >
-                          {m.error}
-                        </div>
-                      )}
-                    </motion.div>
-                  ),
-                )}
-              </AnimatePresence>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {apiKeyMissing && (
+            <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"
+              style={{ background: "rgba(201,138,26,0.08)", border: "1px solid rgba(201,138,26,0.2)", color: "var(--ink-2)" }}>
+              <AlertCircle size={13} strokeWidth={1.75} style={{ color: "var(--warn)", flexShrink: 0, marginTop: 1 }} />
+              VITE_GOOGLE_AI_API_KEY not set in .env
             </div>
+          )}
+
+          {/* Hidden input */}
+          <input id={inputId} type="file" className="sr-only"
+            accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.xls,.txt"
+            disabled={parseStep === "uploading" || parseStep === "extracting"}
+            onChange={handleFileChange} />
+
+          {/* Drop zone */}
+          <label htmlFor={inputId}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors"
+            style={{
+              borderColor: dragging ? "var(--color-accent)" : "rgba(25,40,55,0.15)",
+              background: dragging ? "rgba(115,66,226,0.04)" : "var(--color-login-bg)",
+              opacity: (parseStep === "uploading" || parseStep === "extracting") ? 0.6 : 1,
+              pointerEvents: (parseStep === "uploading" || parseStep === "extracting") ? "none" : "auto",
+            }}>
+            <div className="flex size-11 items-center justify-center rounded-xl" style={{ background: "rgba(115,66,226,0.1)" }}>
+              <Upload size={22} strokeWidth={1.75} style={{ color: "var(--color-accent)" }} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold">Click to upload or drag & drop</p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--ink-3)" }}>PDF · PNG · JPG · CSV · XLSX</p>
+            </div>
+          </label>
+
+          {/* Progress */}
+          {parseStep !== "idle" && (
+            <Panel>
+              <div className="flex items-center justify-between">
+                <p className="truncate text-xs font-medium pr-2">{parseFile}</p>
+                {parseStep === "error"     && <AlertCircle  size={14} style={{ color: "var(--bad)",  flexShrink: 0 }} />}
+                {parseStep === "ready"     && <CheckCircle2 size={14} style={{ color: "var(--ok)",   flexShrink: 0 }} />}
+                {(parseStep === "uploading" || parseStep === "extracting") && (
+                  <Loader2 size={14} className="animate-spin shrink-0" style={{ color: "var(--color-accent)" }} />
+                )}
+              </div>
+              <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: "var(--color-login-bg)" }}>
+                <motion.div className="h-full rounded-full"
+                  style={{ background: parseStep === "error" ? "var(--bad)" : parseStep === "ready" ? "var(--ok)" : "var(--color-accent)" }}
+                  animate={{ width: parseStep === "error" ? "100%" : parseStep === "ready" ? "100%" : parseStep === "extracting" ? "65%" : "25%" }}
+                  transition={{ duration: 0.5 }} />
+              </div>
+              {parseStep === "extracting" && <p className="mt-1.5 text-xs" style={{ color: "var(--ink-3)" }}>Gemini AI extracting fields…</p>}
+              {parseStep === "error" && <p className="mt-1.5 text-xs" style={{ color: "var(--bad)" }}>{parseErr}</p>}
+              {parseStep === "error" && (
+                <button type="button" onClick={() => setParseStep("idle")}
+                  className="mt-2 flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+                  <RefreshCw size={11} strokeWidth={2} /> Try again
+                </button>
+              )}
+            </Panel>
+          )}
+
+          {/* Extracted fields */}
+          {parseStep === "ready" && parseFields.length > 0 && (
+            <FieldsCard fileName={parseFile} fields={parseFields} onPost={handleManualPost} />
           )}
         </div>
       </div>
 
-      {/* Docked composer once the session has started */}
-      {started && (
-        <motion.div
-          layout
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="shrink-0 border-t"
-          style={{ borderColor: "var(--hairline)", background: "var(--color-login-bg)" }}
-        >
-          <div className="mx-auto w-full max-w-3xl px-4 py-3 sm:px-6">{composer}</div>
-        </motion.div>
-      )}
+      {/* ── Right: chat ────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 flex-col">
+        {/* Chat header */}
+        <div className="flex items-center justify-between border-b px-5 py-3" style={{ borderColor: "var(--hairline)", background: "#fff" }}>
+          <p className="text-sm font-semibold">AI Agent</p>
+          <div className="flex items-center gap-2">
+            {!toolCtx && (
+              <span className="rounded-full px-2.5 py-1 text-xs" style={{ background: "rgba(201,138,26,0.1)", color: "var(--warn)" }}>
+                Profile loading…
+              </span>
+            )}
+            {messages.length > 0 && (
+              <button type="button" onClick={clearChat}
+                className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
+                style={{ borderColor: "var(--hairline)", color: "var(--ink-2)" }}>
+                <X size={11} strokeWidth={2} /> New chat
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+          {isEmpty && (
+            <div className="mx-auto flex max-w-lg flex-col items-center gap-4 pt-16 text-center">
+              <p className="text-base font-semibold">Ask me anything about your trades</p>
+              <p className="text-sm" style={{ color: "var(--ink-2)" }}>
+                Upload a document on the left, or type a question. I can read and update your ledger directly.
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {["Show me my recent transactions", "Any fee discrepancies in my ledger?", "What's my PSX CGT this year?", "Flag anything that needs review"].map((s) => (
+                  <button key={s} type="button" onClick={() => setInput(s)}
+                    className="rounded-full border bg-white px-3.5 py-2 text-xs font-medium transition-shadow hover:shadow-md"
+                    style={{ borderColor: "var(--hairline)" }}>{s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mx-auto max-w-2xl space-y-5">
+            <AnimatePresence initial={false}>
+              {messages.map((msg, mi) => (
+                <motion.div key={mi} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                  {msg.role === "user" ? (
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%] space-y-1.5">
+                        {msg.attachments?.map((a) => (
+                          <div key={a.id} className="flex justify-end">
+                            <span className="inline-flex items-center gap-1.5 rounded-xl border bg-white px-2.5 py-1.5 text-xs"
+                              style={{ borderColor: "var(--hairline)" }}>
+                              <Paperclip size={11} strokeWidth={1.75} style={{ color: "var(--color-accent)" }} />
+                              {a.name}
+                            </span>
+                          </div>
+                        ))}
+                        {msg.text && (
+                          <div className="rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-white"
+                            style={{ background: "var(--color-accent)" }}>{msg.text}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {msg.text ? (
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: "var(--color-text)" }}>
+                          {msg.text}{msg.streaming && <Cursor />}
+                        </p>
+                      ) : msg.streaming ? (
+                        <Cursor />
+                      ) : null}
+                      {msg.toolCalls?.map((tc, ti) => (
+                        <ToolCard key={tc.id} tc={tc}
+                          onConfirm={() => confirmTool(mi, ti)}
+                          onReject={() => rejectTool(mi, ti)} />
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {/* Composer */}
+        <div className="border-t px-4 py-3 sm:px-6" style={{ borderColor: "var(--hairline)", background: "#fff" }}>
+          <div className="mx-auto max-w-2xl">
+            {attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {attachments.map((a) => (
+                  <span key={a.id} className="inline-flex items-center gap-1.5 rounded-xl border bg-white px-2.5 py-1.5 text-xs"
+                    style={{ borderColor: "var(--hairline)" }}>
+                    <Paperclip size={11} strokeWidth={1.75} style={{ color: "var(--color-accent)" }} />
+                    <span className="max-w-[110px] truncate">{a.name}</span>
+                    <button type="button" onClick={() => setAttachments((p) => p.filter((x) => x.id !== a.id))}
+                      style={{ color: "var(--ink-3)" }}><X size={11} strokeWidth={2} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex items-end gap-2 rounded-2xl px-3 py-2 transition-shadow focus-within:shadow-md"
+              style={{ border: "1px solid var(--hairline)", background: "var(--color-login-bg)" }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) runExtract(file); }}>
+              <label htmlFor={inputId} className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl hover:bg-black/5">
+                <Paperclip size={16} strokeWidth={1.75} style={{ color: "var(--ink-2)" }} />
+              </label>
+              <textarea rows={1} value={input} disabled={busy}
+                onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`; }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!busy) submit(); } }}
+                placeholder="Ask about your trades, tax, or upload a document…"
+                className="flex-1 resize-none bg-transparent py-1.5 text-sm outline-none"
+                style={{ minHeight: 34, maxHeight: 140, color: "var(--color-text)" }} />
+              {busy ? (
+                <button type="button" onClick={stop} className="flex size-8 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: "var(--bad)" }}>
+                  <StopCircle size={15} strokeWidth={1.75} />
+                </button>
+              ) : (
+                <button type="button" onClick={submit} disabled={!input.trim() && attachments.length === 0}
+                  className="flex size-8 shrink-0 items-center justify-center rounded-xl text-white disabled:opacity-30"
+                  style={{ background: "var(--color-accent)" }}>
+                  <Send size={14} strokeWidth={2} />
+                </button>
+              )}
+            </div>
+            <p className="mt-1.5 text-center text-xs" style={{ color: "var(--ink-3)" }}>
+              Enter to send · Shift+Enter for new line · AI can read and write your ledger
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

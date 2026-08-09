@@ -21,6 +21,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as AppAgentRouteImport } from './routes/app.agent'
 import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppLedgerRouteImport } from './routes/app.ledger'
@@ -91,6 +92,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAgentRoute = AppAgentRouteImport.update({
+  id: '/agent',
+  path: '/agent',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditTrailRoute = AppAuditTrailRouteImport.update({
   id: '/audit-trail',
   path: '/audit-trail',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
@@ -173,6 +180,7 @@ export interface FileRoutesByTo {
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/signin'
     | '/signup'
+    | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
     | '/app/ledger'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/signin'
     | '/signup'
+    | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
     | '/app/ledger'
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/signin'
     | '/signup'
+    | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
     | '/app/ledger'
@@ -380,6 +392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/agent': {
+      id: '/app/agent'
+      path: '/agent'
+      fullPath: '/app/agent'
+      preLoaderRoute: typeof AppAgentRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/audit-trail': {
       id: '/app/audit-trail'
       path: '/audit-trail'
@@ -447,6 +466,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAgentRoute: typeof AppAgentRoute
   AppAuditTrailRoute: typeof AppAuditTrailRoute
   AppBillingRoute: typeof AppBillingRoute
   AppLedgerRoute: typeof AppLedgerRoute
@@ -459,6 +479,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAgentRoute: AppAgentRoute,
   AppAuditTrailRoute: AppAuditTrailRoute,
   AppBillingRoute: AppBillingRoute,
   AppLedgerRoute: AppLedgerRoute,
@@ -489,3 +510,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -25,14 +25,14 @@ import { useAuth } from "@/lib/auth-context";
 
 const navItems = [
   { label: "Overview",       icon: LayoutDashboard, to: "/app/overview" },
-  { label: "Ledger",         icon: BookOpen,         to: "/app/ledger" },
-  { label: "Parser",         icon: FileSearch,       to: "/app/parser" },
-  { label: "Reconciliation", icon: GitFork,          to: "/app/reconciliation" },
-  { label: "Tax Center",     icon: BarChart3,        to: "/app/tax" },
-  { label: "Audit Trail",    icon: Shield,           to: "/app/audit-trail" },
-  { label: "Reports",        icon: FileText,         to: "/app/reports" },
-  { label: "Settings",       icon: Settings,         to: "/app/settings" },
-  { label: "Billing",        icon: CreditCard,       to: "/app/billing" },
+  { label: "Ledger",         icon: BookOpen,        to: "/app/ledger" },
+  { label: "Parser",         icon: FileSearch,      to: "/app/parser" },
+  { label: "Reconciliation", icon: GitFork,         to: "/app/reconciliation" },
+  { label: "Tax Center",     icon: BarChart3,       to: "/app/tax" },
+  { label: "Audit Trail",    icon: Shield,          to: "/app/audit-trail" },
+  { label: "Reports",        icon: FileText,        to: "/app/reports" },
+  { label: "Settings",       icon: Settings,        to: "/app/settings" },
+  { label: "Billing",        icon: CreditCard,      to: "/app/billing" },
 ] as const;
 
 function NavItem({
@@ -84,6 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const orgName     = profile?.org_name || "My Organisation";
   const plan        = profile?.plan || "free";
   const initials    = displayName.charAt(0).toUpperCase();
+  const avatarUrl   = profile?.avatar_url || user?.user_metadata?.avatar_url as string | undefined;
 
   function SidebarContent({ onClose }: { onClose?: () => void }) {
     return (
@@ -127,10 +128,27 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-black/5"
           >
             <div
-              className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-              style={{ background: "var(--color-accent)", color: "#fff" }}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full overflow-hidden text-xs font-semibold"
+              style={{ background: avatarUrl ? "transparent" : "var(--color-accent)", color: "#fff" }}
             >
-              {initials}
+              {avatarUrl ? (
+                <img 
+                  src={avatarUrl} 
+                  alt={displayName}
+                  className="size-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initials if image fails to load
+                    e.currentTarget.style.display = 'none';
+                    const parent = e.currentTarget.parentElement;
+                    if (parent) {
+                      parent.style.background = "var(--color-accent)";
+                      parent.textContent = initials;
+                    }
+                  }}
+                />
+              ) : (
+                initials
+              )}
             </div>
             <div className="min-w-0 flex-1 text-left">
               <p className="truncate text-sm font-medium">{displayName}</p>
@@ -206,7 +224,32 @@ export function AppShell({ children }: { children: ReactNode }) {
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
-              className="fixed top-0 left-0 z-50 h-full w-60 overflow-hidden bg-white shadow-2xl lg:hidden"
+              className="fixed top-0 left-0 z-50 h-full w-72 overflow-hidden bg-white shadow-2xl lg:hidden"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <SidebarContent onClose={() => setMobileOpen(false)} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile sidebar overlay */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 lg:hidden"
+              style={{ background: "rgba(25,40,55,0.35)", backdropFilter: "blur(4px)" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileOpen(false)}
+            />
+            <motion.aside
+              className="fixed top-0 left-0 z-50 h-full w-72 overflow-hidden bg-white shadow-2xl lg:hidden"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -237,7 +280,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* Search trigger */}
           <button
             type="button"
-            className="flex flex-1 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm"
+            className="hidden sm:flex flex-1 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm"
             style={{ borderColor: "var(--hairline)", maxWidth: 380 }}
             onClick={() => setSearchOpen(true)}
           >
@@ -248,11 +291,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2">
             <Link
               to="/app/parser"
-              className="hidden items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white sm:flex"
+              className="hidden items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold text-white sm:flex"
               style={{ background: "var(--color-accent)", boxShadow: "0 4px 24px rgba(115,66,226,0.28)" }}
             >
               <Plus size={14} strokeWidth={2} />
-              Upload document
+              <span className="hidden sm:inline">Upload document</span>
             </Link>
 
             <button

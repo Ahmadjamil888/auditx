@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ArrowUpRight, BadgeCheck, CreditCard, Download, Zap } from "lucide-react";
 import { Btn, Panel, StatusPill, reveal } from "@/components/kit";
-import { useAuth } from "@/lib/auth-store";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/app/billing")({
   component: Billing,

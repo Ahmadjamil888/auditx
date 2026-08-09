@@ -1,7 +1,7 @@
 // ─── AuditX agent service ─────────────────────────────────────────────────────
 // UI-agnostic orchestration layer:
 //   ChatComposer → AgentRequest → (extraction + streaming AI) → AgentActivity / AIMessage
-// Reuses the existing Gemini integration in `ai-service.ts` — no duplicate AI system.
+// Model cascade: gemini-2.5-flash-lite (1 000 RPD) → gemini-2.5-flash (250 RPD)
 
 import { GoogleGenAI } from "@google/genai";
 import { parseDocument, parseTextDocument, type ExtractedField } from "@/lib/ai-service";
@@ -99,7 +99,7 @@ export function textToAttachment(name: string, text: string): AgentAttachment {
 }
 
 function getClient(): GoogleGenAI {
-  const key = (import.meta.env['VITE_GOOGLE_AI_API_KEY'] as string | undefined) ?? "";
+  const key = (import.meta.env["VITE_GOOGLE_AI_API_KEY"] as string | undefined) ?? "";
   if (!key || key.length < 10) {
     throw new Error(
       "Google AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file.",
@@ -108,16 +108,59 @@ function getClient(): GoogleGenAI {
   return new GoogleGenAI({ apiKey: key });
 }
 
-const ANALYST_SYSTEM = `You are AuditX, a financial audit and compliance analyst for retail investors in emerging markets (PSX Pakistan, NSE India).
+function isQuotaError(e: unknown): boolean {
+  const msg = String((e as Error)?.message ?? "").toLowerCase();
+  return (
+    msg.includes("429") ||
+    msg.includes("quota") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("rate limit")
+  );
+}
 
-You are given the user's own uploaded financial documents (or the structured fields extracted from them) plus an instruction. Treat the document as the user's data and apply the instruction to it.
+// ── Streaming cascade: lite → flash ──────────────────────────────────────────
+
+const STREAM_MODELS = [
+  "gemini-2.5-flash",  // primary — free tier
+  "gemini-2.5-pro",    // fallback — most capable
+] as const;
+
+async function streamWithCascade(
+  ai: GoogleGenAI,
+  contents: unknown,
+  config: Record<string, unknown>,
+): Promise<AsyncGenerator<{ text?: string }>> {
+  for (let i = 0; i < STREAM_MODELS.length; i++) {
+    const model = STREAM_MODELS[i]!;
+    try {
+      return await ai.models.generateContentStream({
+        model,
+        contents: contents as Parameters<typeof ai.models.generateContentStream>[0]["contents"],
+        config:   config   as Parameters<typeof ai.models.generateContentStream>[0]["config"],
+      });
+    } catch (e) {
+      if (isQuotaError(e) && i < STREAM_MODELS.length - 1) {
+        console.warn(`[AuditX agent] Quota on ${model}, trying ${STREAM_MODELS[i + 1]}…`);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("All AI models quota-exhausted. Please wait a minute and try again.");
+}
+
+// ── Analyst system prompt ─────────────────────────────────────────────────────
+
+const ANALYST_SYSTEM = `You are AuditX, a financial audit and compliance analyst for retail investors in PSX (Pakistan) and NSE (India) markets.
+
+You receive the user's own uploaded financial documents (or structured fields extracted from them) plus an instruction. Apply the instruction to their data.
 
 Response rules:
 - Write as a professional financial/tax assistant, never as a generic chatbot.
 - Use concise markdown: ## / ### headings, short paragraphs, bullet lists, and markdown tables for figures.
-- Prefer a structure of: findings → figures table → status → recommended actions (numbered).
-- Only state numbers you can support from the provided data; say clearly when information is missing rather than inventing it.
-- Never reveal internal deliberation or chain-of-thought; state conclusions and actions only.
+- Structure: findings → figures table → status → recommended actions (numbered).
+- Only state numbers you can support from the provided data. Say clearly when information is missing rather than guessing.
+- Never reveal internal chain-of-thought; state conclusions and actions only.
 - Close with a one-line note that computations are indicative and should be verified before filing.`;
 
 function fieldsSummary(a: AgentAttachment): string {
@@ -136,26 +179,22 @@ export async function runAgent(req: AgentRequest): Promise<string> {
   const steps: AgentStep[] = [];
 
   if (hasNew) {
-    steps.push({ id: "read", label: "Reading uploaded document", status: "pending" });
-    steps.push({ id: "extract", label: "Extracting financial records", status: "pending" });
+    steps.push({ id: "read",    label: "Reading uploaded document",          status: "pending" });
+    steps.push({ id: "extract", label: "Extracting financial records",        status: "pending" });
   }
   steps.push({ id: "context", label: "Applying your instruction to the data", status: "pending" });
   steps.push({ id: "analyze", label: "Analysing transactions and tax exposure", status: "pending" });
-  steps.push({ id: "compose", label: "Preparing recommended actions", status: "pending" });
+  steps.push({ id: "compose", label: "Preparing recommended actions",          status: "pending" });
 
   const emit = () => req.onStep(steps.map((s) => ({ ...s })));
   const set = (id: string, status: StepStatus, detail?: string) => {
     const s = steps.find((x) => x.id === id);
-    if (s) {
-      s.status = status;
-      if (detail !== undefined) s.detail = detail;
-    }
+    if (s) { s.status = status; if (detail !== undefined) s.detail = detail; }
     emit();
   };
-
   emit();
 
-  // 1 ─ Real extraction pass over any newly attached documents
+  // ── Step 1: extract fields from any new attachments ───────────────────────
   if (hasNew) {
     set("read", "active");
     try {
@@ -174,11 +213,11 @@ export async function runAgent(req: AgentRequest): Promise<string> {
     } catch (e) {
       set("read", "done");
       set("extract", "error", (e as Error).message);
-      // Extraction failure is non-fatal — the raw document still goes to the model.
+      // Non-fatal — raw document still sent to model below
     }
   }
 
-  // 2 ─ Build the model request
+  // ── Step 2: build model context ───────────────────────────────────────────
   set("context", "active");
 
   const parts: Array<Record<string, unknown>> = [];
@@ -188,9 +227,7 @@ export async function runAgent(req: AgentRequest): Promise<string> {
     const summary = fieldsSummary(a);
     if (summary) parts.push({ text: summary });
   }
-  parts.push({
-    text: `Jurisdiction: ${req.jurisdiction ?? "PSX"}.\n\nUser instruction:\n${req.prompt}`,
-  });
+  parts.push({ text: `Jurisdiction: ${req.jurisdiction ?? "PSX"}.\n\nUser instruction:\n${req.prompt}` });
 
   const contents = [
     ...req.history.map((t) => ({
@@ -203,27 +240,23 @@ export async function runAgent(req: AgentRequest): Promise<string> {
   set("context", "done");
   set("analyze", "active");
 
-  // 3 ─ Stream the analysis
+  // ── Step 3: stream with model cascade ─────────────────────────────────────
   const ai = getClient();
-  const stream = await ai.models.generateContentStream({
-    model: "gemini-2.0-flash",
-    contents: contents as never,
-    config: {
-      systemInstruction: ANALYST_SYSTEM,
-      temperature: 0.35,
-      maxOutputTokens: 2048,
-    },
+  const stream = await streamWithCascade(ai, contents, {
+    systemInstruction: ANALYST_SYSTEM,
+    temperature: 0.35,
+    maxOutputTokens: 2048,
   });
 
   let full = "";
-  let switched = false;
+  let composing = false;
   for await (const chunk of stream) {
     if (req.signal?.aborted) break;
     const t = chunk.text ?? "";
     if (!t) continue;
     full += t;
-    if (!switched && full.length > 40) {
-      switched = true;
+    if (!composing && full.length > 40) {
+      composing = true;
       set("analyze", "done");
       set("compose", "active");
     }

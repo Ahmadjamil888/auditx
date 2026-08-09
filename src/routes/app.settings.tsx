@@ -5,12 +5,16 @@ import {
   Building2,
   CreditCard,
   Key,
+  Loader2,
+  Plus,
   Trash2,
   Users,
 } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Btn, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
@@ -28,14 +32,108 @@ const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
 
 function Settings() {
   const { profile, user } = useAuth();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("org");
   const [orgName, setOrgName] = useState(profile?.org_name ?? "My Organisation");
+  const [jurisdiction, setJurisdiction] = useState(profile?.jurisdiction ?? "PSX");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [connectingBroker, setConnectingBroker] = useState(false);
+  const [brokers, setBrokers] = useState<Array<{ id: string; name: string; type: string }>>([]);
+  const [notifications, setNotifications] = useState({
+    lowConfidenceAlert: true,
+    reconciliationFlag: true,
+    taxComputationUpdate: false,
+    monthlyDigest: true,
+  });
+
+  const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
+  const initials = displayName.charAt(0).toUpperCase();
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url as string | undefined;
 
   async function save() {
-    await new Promise((r) => setTimeout(r, 600));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (!profile?.org_id) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("orgs")
+        .update({ 
+          org_name: orgName,
+          jurisdiction: jurisdiction 
+        })
+        .eq("id", profile.org_id);
+
+      if (error) throw error;
+
+      // Invalidate and refetch profile
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      // You could add toast notification here
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addBroker() {
+    setConnectingBroker(true);
+    try {
+      // Mock broker connection - in production this would be OAuth or API key entry
+      const { data, error } = await supabase
+        .from("broker_connections")
+        .insert({
+          org_id: profile?.org_id,
+          broker_name: "Demo Broker",
+          connection_type: "api_key",
+          status: "active",
+          connected_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setBrokers(prev => [...prev, { 
+        id: data.id, 
+        name: data.broker_name, 
+        type: data.connection_type 
+      }]);
+      
+      queryClient.invalidateQueries({ queryKey: ["broker_connections"] });
+    } catch (error) {
+      console.error("Failed to add broker:", error);
+      // You could add toast notification here
+    } finally {
+      setConnectingBroker(false);
+    }
+  }
+
+  async function updateNotificationSettings() {
+    if (!profile?.org_id) return;
+    
+    try {
+      const { error } = await supabase
+        .from("org_settings")
+        .upsert({
+          org_id: profile.org_id,
+          notification_preferences: notifications,
+        });
+
+      if (error) throw error;
+      
+      queryClient.invalidateQueries({ queryKey: ["org_settings"] });
+    } catch (error) {
+      console.error("Failed to update notification settings:", error);
+    }
+  }
+
+  function handleNotificationChange(key: keyof typeof notifications, value: boolean) {
+    setNotifications(prev => ({ ...prev, [key]: value }));
+    updateNotificationSettings();
   }
 
   return (
@@ -114,16 +212,22 @@ function Settings() {
                       Default jurisdiction
                     </label>
                     <select
+                      value={jurisdiction}
+                      onChange={(e) => setJurisdiction(e.target.value)}
                       className="w-full rounded-[10px] border bg-white px-4 py-3 text-sm outline-none"
                       style={{ borderColor: "var(--hairline)", maxWidth: 400 }}
-                      defaultValue={profile?.jurisdiction ?? "PSX"}
                     >
                       <option value="PSX">PSX — Pakistan</option>
                       <option value="NSE">NSE — India</option>
                     </select>
                   </div>
-                  <Btn onClick={save} variant="primary">
-                    {saved ? "Saved ✓" : "Save changes"}
+                  <Btn onClick={save} variant="primary" disabled={saving}>
+                    {saving ? (
+                      <>
+                        <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                        Saving...
+                      </>
+                    ) : saved ? "Saved ✓" : "Save changes"}
                   </Btn>
                 </div>
               </Panel>
@@ -192,16 +296,51 @@ function Settings() {
               <Panel>
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm font-semibold">Broker Accounts</p>
-                  <Btn variant="secondary">Add broker</Btn>
+                  <Btn variant="secondary" onClick={addBroker} disabled={connectingBroker}>
+                    {connectingBroker ? (
+                      <>
+                        <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={15} strokeWidth={1.75} />
+                        Add broker
+                      </>
+                    )}
+                  </Btn>
                 </div>
-                <div className="flex flex-col items-center justify-center py-10 gap-2">
-                  <Key size={28} strokeWidth={1.5} style={{ color: "var(--ink-3)" }} />
-                  <p className="text-sm font-medium">No broker accounts added</p>
-                  <p className="text-xs text-center" style={{ color: "var(--ink-3)" }}>
-                    Broker names are inferred automatically when you parse statements.
-                    <br />Use "Add broker" to link an account manually.
-                  </p>
-                </div>
+                {brokers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <Key size={28} strokeWidth={1.5} style={{ color: "var(--ink-3)" }} />
+                    <p className="text-sm font-medium">No broker accounts added</p>
+                    <p className="text-xs text-center" style={{ color: "var(--ink-3)" }}>
+                      Broker names are inferred automatically when you parse statements.
+                      <br />Use "Add broker" to link an account manually.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {brokers.map((broker) => (
+                      <div
+                        key={broker.id}
+                        className="flex items-center justify-between rounded-xl px-4 py-3"
+                        style={{ background: "var(--color-login-bg)" }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{broker.name}</p>
+                          <p className="text-xs" style={{ color: "var(--ink-3)" }}>{broker.type}</p>
+                        </div>
+                        <span
+                          className="rounded-full px-2.5 py-1 text-xs font-medium"
+                          style={{ background: "rgba(31,157,99,0.1)", color: "var(--ok)" }}
+                        >
+                          Connected
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Panel>
             </motion.div>
           )}
@@ -211,7 +350,10 @@ function Settings() {
               <Panel>
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm font-semibold">Team Members</p>
-                  <Btn variant="secondary">Invite member</Btn>
+                  <Btn variant="secondary" disabled>
+                    <Plus size={15} strokeWidth={1.75} />
+                    Invite member
+                  </Btn>
                 </div>
                 <div className="space-y-3">
                   {/* Only the real logged-in user */}
@@ -220,13 +362,29 @@ function Settings() {
                     style={{ background: "var(--color-login-bg)" }}
                   >
                     <div
-                      className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-                      style={{ background: "var(--color-accent)", color: "#fff" }}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full overflow-hidden text-xs font-semibold"
+                      style={{ background: avatarUrl ? "transparent" : "var(--color-accent)", color: "#fff" }}
                     >
-                      {(profile?.full_name ?? user?.email ?? "?").charAt(0).toUpperCase()}
+                      {avatarUrl ? (
+                        <img 
+                          src={avatarUrl} 
+                          alt={displayName}
+                          className="size-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const parent = e.currentTarget.parentElement;
+                            if (parent) {
+                              parent.style.background = "var(--color-accent)";
+                              parent.textContent = initials;
+                            }
+                          }}
+                        />
+                      ) : (
+                        initials
+                      )}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{profile?.full_name ?? "You"}</p>
+                      <p className="text-sm font-medium">{displayName}</p>
                       <p className="text-xs" style={{ color: "var(--ink-3)" }}>{user?.email ?? ""}</p>
                     </div>
                     <span
@@ -237,7 +395,7 @@ function Settings() {
                     </span>
                   </div>
                   <p className="pt-2 text-center text-xs" style={{ color: "var(--ink-3)" }}>
-                    Invite teammates to collaborate on your organisation's ledger.
+                    Team invitations require additional setup. Contact support to enable team collaboration.
                   </p>
                 </div>
               </Panel>
@@ -250,22 +408,27 @@ function Settings() {
                 <p className="mb-4 text-sm font-semibold">Notification Preferences</p>
                 <div className="space-y-4">
                   {[
-                    { label: "Low-confidence extraction alert", desc: "When a parsed field falls below 0.75", on: true },
-                    { label: "Reconciliation flag detected", desc: "When a discrepancy is found", on: true },
-                    { label: "Tax computation updated", desc: "When new transactions affect your CGT", on: false },
-                    { label: "Monthly ledger digest", desc: "Summary of activity at end of month", on: true },
+                    { key: "lowConfidenceAlert" as const, label: "Low-confidence extraction alert", desc: "When a parsed field falls below 0.75" },
+                    { key: "reconciliationFlag" as const, label: "Reconciliation flag detected", desc: "When a discrepancy is found" },
+                    { key: "taxComputationUpdate" as const, label: "Tax computation updated", desc: "When new transactions affect your CGT" },
+                    { key: "monthlyDigest" as const, label: "Monthly ledger digest", desc: "Summary of activity at end of month" },
                   ].map((n) => (
-                    <div key={n.label} className="flex items-start justify-between gap-4">
+                    <div key={n.key} className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium">{n.label}</p>
                         <p className="text-xs" style={{ color: "var(--ink-3)" }}>{n.desc}</p>
                       </div>
                       <label className="relative inline-flex cursor-pointer items-center">
-                        <input type="checkbox" defaultChecked={n.on} className="sr-only peer" />
+                        <input 
+                          type="checkbox" 
+                          checked={notifications[n.key]}
+                          onChange={(e) => handleNotificationChange(n.key, e.target.checked)}
+                          className="sr-only peer" 
+                        />
                         <div
                           className="h-5 w-9 rounded-full peer-checked:after:translate-x-4 after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform"
                           style={{
-                            background: n.on ? "var(--color-accent)" : "var(--color-sheet)",
+                            background: notifications[n.key] ? "var(--color-accent)" : "var(--color-sheet)",
                           }}
                         />
                       </label>

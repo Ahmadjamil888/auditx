@@ -64,9 +64,24 @@ function Reconciliation() {
   }
 
   function handleResolve(flagId: string) {
-    resolveMutation.mutate({ flagId, orgId: profile?.org_id ?? "demo-org" });
-    setResolved((p) => new Set([...p, flagId]));
-    setExpanded(null);
+    if (!profile?.org_id) {
+      console.error("Cannot resolve flag: user profile missing");
+      return;
+    }
+    
+    resolveMutation.mutate(
+      { flagId, orgId: profile.org_id },
+      {
+        onSuccess: () => {
+          setResolved((p) => new Set([...p, flagId]));
+          setExpanded(null);
+        },
+        onError: (error) => {
+          console.error("Failed to resolve flag:", error);
+          // You could add toast notification here
+        }
+      }
+    );
   }
 
   return (
@@ -265,13 +280,19 @@ function Reconciliation() {
                                 <Btn
                                   variant="primary"
                                   onClick={() => handleResolve(flag.id)}
+                                  disabled={resolveMutation.isPending}
                                 >
-                                  <CheckCircle2 size={15} strokeWidth={1.75} />
-                                  Apply fix
+                                  {resolveMutation.isPending ? (
+                                    <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 size={15} strokeWidth={1.75} />
+                                  )}
+                                  {resolveMutation.isPending ? "Applying..." : "Apply fix"}
                                 </Btn>
                                 <Btn
                                   variant="secondary"
                                   onClick={() => handleResolve(flag.id)}
+                                  disabled={resolveMutation.isPending}
                                 >
                                   Mark as expected
                                 </Btn>

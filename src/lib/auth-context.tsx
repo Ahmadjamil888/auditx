@@ -13,6 +13,7 @@ interface OrgProfile {
   role: string;
   jurisdiction: string;
   plan: "free" | "pro" | "enterprise";
+  avatar_url?: string;
 }
 
 interface AuthContextValue {
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: row.role,
         jurisdiction: org?.jurisdiction_default ?? "PSX",
         plan: (sub?.plan ?? "free") as "free" | "pro" | "enterprise",
+        avatar_url: user?.user_metadata?.avatar_url as string | undefined,
       });
     } catch {
       // Profile table not yet set up — leave profile as null
