@@ -99,7 +99,7 @@ export function textToAttachment(name: string, text: string): AgentAttachment {
 }
 
 function getClient(): GoogleGenAI {
-  const key = (import.meta.env.VITE_GOOGLE_AI_API_KEY as string | undefined) ?? "";
+  const key = (import.meta.env['VITE_GOOGLE_AI_API_KEY'] as string | undefined) ?? "";
   if (!key || key.length < 10) {
     throw new Error(
       "Google AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file.",
