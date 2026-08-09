@@ -148,11 +148,32 @@ export async function executeTool(
         if (args.action)  q = q.eq("action",  String(args.action).toUpperCase());
 
         const { data, error } = await q;
-        if (error) return { ok: false, error: error.message };
+        if (error) {
+          console.error("[AuditX Tool] get_transactions error:", error);
+          return { ok: false, error: `Database error: ${error.message} (code: ${error.code})` };
+        }
         return { ok: true, data };
       }
 
       case "insert_transaction": {
+        // Validate required fields
+        const requiredFields = ['ticker', 'action', 'quantity', 'price', 'trade_date'];
+        const missingFields = requiredFields.filter(field => !args[field]);
+        if (missingFields.length > 0) {
+          return { ok: false, error: `Missing required fields: ${missingFields.join(', ')}` };
+        }
+
+        // Validate field values
+        if (typeof args.ticker !== 'string' || args.ticker.length === 0) {
+          return { ok: false, error: 'Invalid ticker: must be a non-empty string' };
+        }
+        if (typeof args.quantity !== 'number' || args.quantity <= 0) {
+          return { ok: false, error: 'Invalid quantity: must be a positive number' };
+        }
+        if (typeof args.price !== 'number' || args.price <= 0) {
+          return { ok: false, error: 'Invalid price: must be a positive number' };
+        }
+
         const { data, error } = await supabase.from("transactions").insert({
           org_id:           ctx.orgId,
           ticker:           String(args.ticker ?? "").toUpperCase(),
@@ -170,7 +191,11 @@ export async function executeTool(
           source:           { via: "ai_agent", actor: ctx.userEmail },
         }).select().single();
 
-        if (error) return { ok: false, error: error.message };
+        if (error) {
+          console.error("[AuditX Tool] insert_transaction error:", error);
+          console.error("[AuditX Tool] Insert args:", args);
+          return { ok: false, error: `Database error: ${error.message} (code: ${error.code})` };
+        }
 
         // Invalidate transactions cache
         ctx.invalidate([["transactions", ctx.orgId]]);
@@ -183,6 +208,10 @@ export async function executeTool(
 
       case "update_transaction": {
         const id = String(args.id);
+        if (!id || id.length === 0) {
+          return { ok: false, error: 'Invalid transaction ID: must be a non-empty string' };
+        }
+
         const updates: Record<string, unknown> = {};
         for (const key of ["ticker","action","quantity","price","fees","wht","trade_date","ref_id","broker","exchange","status"]) {
           if (args[key] !== undefined) updates[key] = args[key];
@@ -198,7 +227,10 @@ export async function executeTool(
           .select()
           .single();
 
-        if (error) return { ok: false, error: error.message };
+        if (error) {
+          console.error("[AuditX Tool] update_transaction error:", error);
+          return { ok: false, error: `Database error: ${error.message} (code: ${error.code})` };
+        }
 
         ctx.invalidate([["transactions", ctx.orgId]]);
         await writeAuditLog(ctx, "ai_update_transaction", "transaction", id, updates);

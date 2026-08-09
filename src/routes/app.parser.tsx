@@ -463,8 +463,14 @@ function Parser() {
       }
 
     } catch (e) {
-      const errMsg = (e as Error).message ?? "Something went wrong.";
-      setMessages((p) => p.map((m, i) => i === aiIdx ? { ...m, text: `⚠ ${errMsg}`, streaming: false } : m));
+      const error = e as Error;
+      const errMsg = error.message ?? "Something went wrong.";
+      console.error("[AuditX Parser] Error:", error);
+      setMessages((p) => p.map((m, i) => i === aiIdx ? { 
+        ...m, 
+        text: `⚠ Error: ${errMsg}${error.stack ? `\n\nDetails: ${error.stack.slice(0, 200)}` : ''}`, 
+        streaming: false 
+      } : m));
     } finally {
       setBusy(false); abortRef.current = null;
     }

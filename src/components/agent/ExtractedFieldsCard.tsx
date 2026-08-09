@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { StatusPill } from "@/components/kit";
 import type { ExtractedField } from "@/lib/ai-service";
 import { useAuth } from "@/lib/auth-context";
@@ -55,9 +56,17 @@ export function ExtractedFieldsCard({
     const broker = get("Broker Name");
     const exchange = get("Exchange") || profile.jurisdiction;
 
-    const fail = (m: string) => {
+    const fail = (m: string, dbError?: any) => {
+      console.error("[ExtractedFieldsCard] Transaction insert failed:", { 
+        error: m, 
+        dbError, 
+        payload: { ticker, action, quantity, price, trade_date, broker, exchange } 
+      });
       setError(m);
       setPosting(false);
+      toast.error("Failed to post transaction", {
+        description: m,
+      });
     };
     if (!ticker) return fail("Ticker symbol is required.");
     if (!["BUY", "SELL", "DIV"].includes(action)) return fail("Action must be BUY, SELL, or DIV.");
@@ -67,7 +76,11 @@ export function ExtractedFieldsCard({
 
     const overall = fields.reduce((s, f) => s + f.confidence, 0) / (fields.length || 1);
 
-    const { error: dbError } = await supabase.from("transactions").insert({
+    console.log("[ExtractedFieldsCard] Attempting to insert transaction:", {
+      ticker, action, quantity, price, trade_date, broker, exchange, org_id: profile.org_id
+    });
+
+    const { data, error: dbError } = await supabase.from("transactions").insert({
       org_id: profile.org_id,
       ticker,
       action,
@@ -82,13 +95,26 @@ export function ExtractedFieldsCard({
       exchange,
       broker,
       source: { filename: fileName, extracted_at: new Date().toISOString() },
-    });
+    }).select().single();
 
-    if (dbError) return fail(`Save failed: ${dbError.message}`);
+    if (dbError) {
+      console.error("[ExtractedFieldsCard] Supabase error details:", {
+        message: dbError.message,
+        code: dbError.code,
+        details: dbError.details,
+        hint: dbError.hint
+      });
+      return fail(`Database error: ${dbError.message} (code: ${dbError.code})`, dbError);
+    }
+
+    console.log("[ExtractedFieldsCard] Transaction inserted successfully:", data);
 
     await queryClient.invalidateQueries({ queryKey: ["transactions", profile.org_id] });
     setPosted(true);
     setPosting(false);
+    toast.success("Transaction posted to ledger", {
+      description: `${ticker} ${action} ${quantity} shares at ${price}`,
+    });
   }
 
   return (

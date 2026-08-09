@@ -11,14 +11,19 @@ export function useTransactions(orgId: string | undefined) {
     queryKey: ["transactions", orgId],
     enabled: !!orgId,
     queryFn: async () => {
+      console.log("[useTransactions] Fetching transactions for org:", orgId);
       const { data, error } = await supabase
         .from("transactions")
         .select("*")
         .eq("org_id", orgId!)
         .order("trade_date", { ascending: false });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[useTransactions] Error fetching transactions:", error);
+        throw new Error(error.message);
+      }
 
+      console.log("[useTransactions] Fetched", data?.length || 0, "transactions");
       return (data ?? []).map((row) => ({
         id:               row.id,
         ticker:           row.ticker,
@@ -35,7 +40,7 @@ export function useTransactions(orgId: string | undefined) {
         exchange:         row.exchange as Transaction["exchange"],
       })) as Transaction[];
     },
-    staleTime: 30_000,
+    staleTime: 0, // Always fetch fresh data to ensure UI shows latest state
   });
 }
 
