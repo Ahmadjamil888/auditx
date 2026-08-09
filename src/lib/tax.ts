@@ -78,7 +78,7 @@ export function computeTax(txs: Transaction[], profile: TaxProfile): TaxComputat
 
   for (const tx of allBuys) {
     if (!buyQueues[tx.ticker]) buyQueues[tx.ticker] = [];
-    buyQueues[tx.ticker].push({ date: tx.trade_date, qty: tx.quantity, price: tx.price });
+    buyQueues[tx.ticker]!.push({ date: tx.trade_date, qty: tx.quantity, price: tx.price });
   }
 
   // Match sells against buy lots using FIFO

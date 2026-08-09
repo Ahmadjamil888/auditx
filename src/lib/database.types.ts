@@ -5,6 +5,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
 export interface Database {
+  __InternalSupabase: { PostgrestVersion: "12" };
   public: {
     Tables: {
       organizations: {
@@ -21,6 +22,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["organizations"]["Insert"]>;
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -40,6 +42,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+        Relationships: [];
       };
       transactions: {
         Row: {
@@ -83,6 +86,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["transactions"]["Insert"]>;
+        Relationships: [];
       };
       reconciliation_flags: {
         Row: {
@@ -116,6 +120,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["reconciliation_flags"]["Insert"]>;
+        Relationships: [];
       };
       audit_log: {
         Row: {
@@ -143,6 +148,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["audit_log"]["Insert"]>;
+        Relationships: [];
       };
       documents: {
         Row: {
@@ -168,6 +174,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["documents"]["Insert"]>;
+        Relationships: [];
       };
       broker_accounts: {
         Row: {
@@ -191,6 +198,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["broker_accounts"]["Insert"]>;
+        Relationships: [];
       };
       tax_computations: {
         Row: {
@@ -222,6 +230,7 @@ export interface Database {
           computed_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["tax_computations"]["Insert"]>;
+        Relationships: [];
       };
       subscriptions: {
         Row: {
@@ -245,10 +254,12 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["subscriptions"]["Insert"]>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

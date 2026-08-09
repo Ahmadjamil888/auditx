@@ -46,7 +46,7 @@ function NavItem({
   icon: typeof LayoutDashboard;
   to: string;
   active: boolean;
-  onClick?: () => void;
+  onClick?: (() => void) | undefined;
 }) {
   return (
     <Link

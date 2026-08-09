@@ -151,7 +151,7 @@ function AuditTrail() {
                   className="transition-colors hover:bg-violet-50/40"
                 >
                   <td className="tnum px-4 py-3 text-xs" style={{ color: "var(--ink-2)" }}>
-                    {new Date(row.created_at ?? row.timestamp).toLocaleString("en-PK", { dateStyle: "short", timeStyle: "short" })}
+                    {new Date(row.created_at).toLocaleString("en-PK", { dateStyle: "short", timeStyle: "short" })}
                   </td>
                   <td className="px-4 py-3 text-sm">{row.actor}</td>
                   <td className="px-4 py-3">
