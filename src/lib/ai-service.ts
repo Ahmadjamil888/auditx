@@ -221,17 +221,37 @@ Return ONLY the JSON object — nothing else.`;
 // ── Field builder ──────────────────────────────────────────────────────────────
 
 function buildFields(parsed: Record<string, unknown>, conf: Record<string, number>): ExtractedField[] {
+  // Handle both old format (field_confidences) and new direct format
+  const getConfidence = (field: string) => {
+    // Try direct field name first
+    if (conf[field] !== undefined) return conf[field];
+    // Try mapped names
+    const mappings: Record<string, string> = {
+      'transaction_date': 'transaction_date',
+      'ticker': 'ticker',
+      'action': 'action', 
+      'quantity': 'quantity',
+      'price': 'price',
+      'fees': 'fees',
+      'wht': 'wht',
+      'ref_id': 'ref_id',
+      'broker': 'broker',
+      'exchange': 'exchange',
+    };
+    return conf[mappings[field as keyof typeof mappings]] ?? 0.5;
+  };
+
   return [
-    { field: "Transaction Date",  value: String(parsed.transaction_date ?? ""), confidence: conf.transaction_date ?? 0.5 },
-    { field: "Ticker Symbol",     value: String(parsed.ticker   ?? ""),          confidence: conf.ticker           ?? 0.5 },
-    { field: "Action",            value: String(parsed.action   ?? ""),          confidence: conf.action           ?? 0.5 },
-    { field: "Quantity",          value: String(parsed.quantity ?? ""),          confidence: conf.quantity         ?? 0.5 },
-    { field: "Execution Price",   value: String(parsed.price    ?? ""),          confidence: conf.price            ?? 0.5 },
-    { field: "Commission / Fees", value: String(parsed.fees     ?? 0),           confidence: conf.fees             ?? 0.5 },
-    { field: "WHT",               value: String(parsed.wht      ?? 0),           confidence: conf.wht              ?? 0.5 },
-    { field: "Reference ID",      value: String(parsed.ref_id   ?? ""),          confidence: conf.ref_id           ?? 0.5 },
-    { field: "Broker Name",       value: String(parsed.broker   ?? ""),          confidence: conf.broker           ?? 0.5 },
-    { field: "Exchange",          value: String(parsed.exchange ?? ""),          confidence: conf.exchange         ?? 0.5 },
+    { field: "Transaction Date",  value: String(parsed.transaction_date ?? ""), confidence: getConfidence('transaction_date') },
+    { field: "Ticker Symbol",     value: String(parsed.ticker   ?? ""),          confidence: getConfidence('ticker') },
+    { field: "Action",            value: String(parsed.action   ?? ""),          confidence: getConfidence('action') },
+    { field: "Quantity",          value: String(parsed.quantity ?? ""),          confidence: getConfidence('quantity') },
+    { field: "Execution Price",   value: String(parsed.price    ?? ""),          confidence: getConfidence('price') },
+    { field: "Commission / Fees", value: String(parsed.fees     ?? 0),           confidence: getConfidence('fees') },
+    { field: "WHT",               value: String(parsed.wht      ?? 0),           confidence: getConfidence('wht') },
+    { field: "Reference ID",      value: String(parsed.ref_id   ?? ""),          confidence: getConfidence('ref_id') },
+    { field: "Broker Name",       value: String(parsed.broker   ?? ""),          confidence: getConfidence('broker') },
+    { field: "Exchange",          value: String(parsed.exchange ?? ""),          confidence: getConfidence('exchange') },
   ];
 }
 
@@ -296,6 +316,16 @@ export async function parseTextDocument(
   textContent: string,
   filename:    string,
 ): Promise<ParsedStatement> {
+  // Check if this looks like a CSV with multiple rows
+  const lines = textContent.split('\n').filter(line => line.trim());
+  const isCSV = filename.endsWith('.csv') || lines.length > 5; // Heuristic: CSV likely if many lines
+  
+  if (isCSV && lines.length > 2) {
+    // For CSV files, parse programmatically instead of using AI
+    return parseCSVProgrammatically(textContent, filename);
+  }
+
+  // For single trade confirmations, use AI parsing
   const text = await runWithCascade({
     taskLabel: "parse-text",
     contents: [
@@ -312,13 +342,102 @@ export async function parseTextDocument(
       systemInstruction: PARSE_SYSTEM,
       responseMimeType:  "application/json",
       temperature:       0.1,
-      maxOutputTokens:   1024,
+      maxOutputTokens:   2048, // Increased for safety
     },
   });
 
   const parsed = safeParseJSON(text);
   const conf   = (parsed.field_confidences as Record<string, number>) ?? {};
   return toStatement(parsed, buildFields(parsed, conf));
+}
+
+// ── Programmatic CSV parser ───────────────────────────────────────────────────
+
+function parseCSVProgrammatically(csvContent: string, filename: string): ParsedStatement {
+  const lines = csvContent.split('\n').filter(line => line.trim());
+  
+  if (lines.length < 2) {
+    throw new Error("CSV file appears to be empty or invalid");
+  }
+
+  // Simple CSV parsing - assumes first row is headers
+  const headers = lines[0]!.split(',').map(h => h.trim().toLowerCase());
+  const dataRows = lines.slice(1);
+  
+  // For now, just parse the first row as a single transaction
+  // In a full implementation, you'd process all rows
+  const firstRow = dataRows[0]!.split(',').map(v => v.trim());
+  
+  const parsed: Record<string, unknown> = {};
+  const confidences: Record<string, number> = {};
+  
+  // Map common CSV column names to our schema
+  const fieldMapping: Record<string, string> = {
+    'date': 'transaction_date',
+    'ticker': 'ticker', 
+    'symbol': 'ticker',
+    'action': 'action',
+    'type': 'action',
+    'quantity': 'quantity',
+    'qty': 'quantity',
+    'price': 'price',
+    'fees': 'fees',
+    'commission': 'fees',
+    'wht': 'wht',
+    'tax': 'wht',
+    'withholding': 'wht',
+    'ref': 'ref_id',
+    'reference': 'ref_id',
+    'broker': 'broker',
+    'exchange': 'exchange',
+  };
+
+  headers.forEach((header, index) => {
+    const mappedField = fieldMapping[header] || header;
+    const value = firstRow[index] || '';
+    
+    if (mappedField === 'transaction_date') {
+      parsed[mappedField] = value;
+      confidences[mappedField] = 0.95;
+    } else if (mappedField === 'ticker') {
+      parsed[mappedField] = value.toUpperCase();
+      confidences[mappedField] = 0.9;
+    } else if (mappedField === 'action') {
+      const actionUpper = value.toUpperCase();
+      parsed[mappedField] = ['BUY', 'SELL', 'DIV'].includes(actionUpper) ? actionUpper : 'BUY';
+      confidences[mappedField] = 0.85;
+    } else if (['quantity', 'price', 'fees', 'wht'].includes(mappedField)) {
+      const numValue = parseFloat(value.replace(/[^0-9.-]/g, '')) || 0;
+      parsed[mappedField] = numValue;
+      confidences[mappedField] = value ? 0.9 : 0.5;
+    } else {
+      parsed[mappedField] = value;
+      confidences[mappedField] = 0.7;
+    }
+  });
+
+  // Set defaults for missing required fields
+  if (!parsed.transaction_date) parsed.transaction_date = new Date().toISOString().split('T')[0];
+  if (!parsed.ticker) parsed.ticker = 'UNKNOWN';
+  if (!parsed.action) parsed.action = 'BUY';
+  if (!parsed.quantity) parsed.quantity = 0;
+  if (!parsed.price) parsed.price = 0;
+
+  // Convert confidences to the expected format for buildFields
+  const fieldConfidences: Record<string, number> = {
+    transaction_date: confidences.transaction_date ?? 0.5,
+    ticker: confidences.ticker ?? 0.5,
+    action: confidences.action ?? 0.5,
+    quantity: confidences.quantity ?? 0.5,
+    price: confidences.price ?? 0.5,
+    fees: confidences.fees ?? 0.5,
+    wht: confidences.wht ?? 0.5,
+    ref_id: confidences.ref_id ?? 0.5,
+    broker: confidences.broker ?? 0.5,
+    exchange: confidences.exchange ?? 0.5,
+  };
+
+  return toStatement(parsed, buildFields(parsed, fieldConfidences));
 }
 
 // ── Agent: explain anomaly / reconciliation flag ───────────────────────────────

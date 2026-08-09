@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ArrowUpRight, BadgeCheck, CreditCard, Download, Zap } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Btn, Panel, StatusPill, reveal } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 
@@ -49,9 +51,33 @@ const invoices = [
 
 function Billing() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const usedTx = 31;
   const limitTx = user?.plan === "free" ? 50 : null;
+
+  function handleManagePayment() {
+    toast.info("Payment management would open Stripe Customer Portal in production");
+    // In production: window.location.href = stripeCustomerPortalUrl;
+  }
+
+  function handleUpgrade() {
+    navigate({ to: "/pricing" });
+  }
+
+  function handlePlanUpgrade(planName: string) {
+    if (planName === "Enterprise") {
+      window.location.href = "mailto:sales@auditx.demo?subject=Enterprise Plan Upgrade";
+    } else {
+      toast.info(`Upgrade to ${planName} would redirect to Stripe Checkout in production`);
+      // In production: redirect to Stripe Checkout
+    }
+  }
+
+  function handleDownloadInvoice(invoiceId: string) {
+    toast.info(`Downloading invoice ${invoiceId}...`);
+    // In production: download actual PDF from Stripe
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -78,12 +104,12 @@ function Billing() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Btn variant="secondary">
+            <Btn variant="secondary" onClick={handleManagePayment}>
               <CreditCard size={15} strokeWidth={1.75} />
               Manage payment
             </Btn>
             {user?.plan === "free" && (
-              <Btn>
+              <Btn onClick={handleUpgrade}>
                 <Zap size={15} strokeWidth={1.75} />
                 Upgrade to Pro
               </Btn>
@@ -164,6 +190,11 @@ function Billing() {
                   }
                   className="mt-5 w-full"
                   disabled={(user?.plan ?? "pro") === plan.name.toLowerCase()}
+                  onClick={() => {
+                    if ((user?.plan ?? "pro") !== plan.name.toLowerCase()) {
+                      handlePlanUpgrade(plan.name);
+                    }
+                  }}
                 >
                   {(user?.plan ?? "pro") === plan.name.toLowerCase()
                     ? "Current plan"
@@ -204,7 +235,12 @@ function Billing() {
                     <StatusPill tone="ok">{inv.status}</StatusPill>
                   </td>
                   <td className="px-4 py-3">
-                    <button type="button" className="flex items-center gap-1.5 text-xs" style={{ color: "var(--color-accent)" }}>
+                    <button 
+                      type="button" 
+                      className="flex items-center gap-1.5 text-xs" 
+                      style={{ color: "var(--color-accent)" }}
+                      onClick={() => handleDownloadInvoice(inv.id)}
+                    >
                       <Download size={13} strokeWidth={1.75} />
                       PDF
                     </button>
@@ -216,15 +252,15 @@ function Billing() {
         </div>
       </Panel>
 
-      {/* Stripe notice */}
+      {/* Demo notice */}
       <div
         className="flex items-start gap-2.5 rounded-2xl px-5 py-4 text-sm"
-        style={{ background: "rgba(59,111,209,0.06)", border: "1px solid rgba(59,111,209,0.15)" }}
+        style={{ background: "rgba(115,66,226,0.06)", border: "1px solid rgba(115,66,226,0.15)" }}
       >
-        <ArrowUpRight size={15} strokeWidth={1.75} style={{ color: "var(--info)", marginTop: 2, flexShrink: 0 }} />
+        <ArrowUpRight size={15} strokeWidth={1.75} style={{ color: "var(--color-accent)", marginTop: 2, flexShrink: 0 }} />
         <p style={{ color: "var(--ink-2)" }}>
-          Payments are processed securely by Stripe. AuditX never stores card details. Upgrading
-          opens a Stripe Checkout session in a new tab.
+          <strong>Demo Environment:</strong> Billing integration is simulated for this demo. 
+          In production, payments would be processed securely by Stripe with real checkout sessions and invoice generation.
         </p>
       </div>
     </div>

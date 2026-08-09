@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BadgeCheck, Minus } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Btn, Panel, Reveal, StatusPill } from "@/components/kit";
 import { PageShell } from "@/components/site/PageShell";
 
@@ -45,9 +46,22 @@ function Cell({ v }: { v: string | boolean }) {
 }
 
 function Pricing() {
+  const navigate = useNavigate();
   const [annual, setAnnual] = useState(false);
   const pro = annual ? "$7.99" : "$9.99";
   const ent = annual ? "$39" : "$49";
+
+  function handlePlanClick(planName: string) {
+    if (planName === "Free") {
+      navigate({ to: "/signup" });
+    } else if (planName === "Enterprise") {
+      // For enterprise, show contact info or redirect to contact page
+      window.location.href = "mailto:sales@auditx.demo?subject=Enterprise Plan Inquiry";
+    } else {
+      // For Pro plan, navigate to signup with plan selection
+      navigate({ to: "/signup", search: { plan: "pro" } });
+    }
+  }
 
   return (
     <PageShell
@@ -102,7 +116,11 @@ function Pricing() {
               <p className="mt-1 text-xs" style={{ color: "var(--ink-3)" }}>
                 {t.note}
               </p>
-              <Btn className="mt-6 w-full" variant={t.popular ? "primary" : "secondary"}>
+              <Btn 
+                className="mt-6 w-full" 
+                variant={t.popular ? "primary" : "secondary"}
+                onClick={() => handlePlanClick(t.name)}
+              >
                 {t.name === "Enterprise" ? "Contact sales" : "Start Free Audit"}
               </Btn>
             </Panel>
@@ -152,7 +170,7 @@ function Pricing() {
             Enterprise plans can be tailored per jurisdiction, client volume and audit policy.
           </p>
         </div>
-        <Btn>Contact sales</Btn>
+        <Btn onClick={() => window.location.href = "mailto:sales@auditx.demo?subject=Enterprise Inquiry"}>Contact sales</Btn>
       </Panel>
     </PageShell>
   );

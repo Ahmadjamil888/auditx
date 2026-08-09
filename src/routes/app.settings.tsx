@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Btn, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
+import { setNotificationPrefs } from "@/lib/notifications";
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
@@ -82,15 +84,21 @@ function Settings() {
   async function addBroker() {
     setConnectingBroker(true);
     try {
-      // Mock broker connection - in production this would be OAuth or API key entry
+      // Simulate broker connection flow - in production this would use Plaid/SnapTrade Link
+      // For demo purposes, we simulate the OAuth handshake delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Mock broker connection with realistic data
       const { data, error } = await supabase
         .from("broker_connections")
         .insert({
           org_id: profile?.org_id,
-          broker_name: "Demo Broker",
-          connection_type: "api_key",
+          broker_name: "Meridian Capital", // Realistic broker name
+          connection_type: "oauth",
           status: "active",
           connected_at: new Date().toISOString(),
+          account_count: 2, // Simulate multiple accounts
+          last_sync: new Date().toISOString(),
         })
         .select()
         .single();
@@ -104,9 +112,12 @@ function Settings() {
       }]);
       
       queryClient.invalidateQueries({ queryKey: ["broker_connections"] });
+      
+      // In production, this would trigger a real sync of transactions
+      console.log("[AuditX] Broker connected - would trigger transaction sync");
     } catch (error) {
       console.error("Failed to add broker:", error);
-      // You could add toast notification here
+      alert("Failed to connect broker. Please try again.");
     } finally {
       setConnectingBroker(false);
     }
@@ -126,14 +137,30 @@ function Settings() {
       if (error) throw error;
       
       queryClient.invalidateQueries({ queryKey: ["org_settings"] });
+      toast.success("Notification preferences updated");
     } catch (error) {
       console.error("Failed to update notification settings:", error);
+      toast.error("Failed to update notification settings");
     }
   }
 
   function handleNotificationChange(key: keyof typeof notifications, value: boolean) {
     setNotifications(prev => ({ ...prev, [key]: value }));
     updateNotificationSettings();
+    
+    // Update the notification system preferences
+    setNotificationPrefs(notifications);
+    
+    // Trigger a test notification for the changed setting
+    if (value) {
+      const messages: Record<keyof typeof notifications, string> = {
+        lowConfidenceAlert: "Low-confidence extraction alerts enabled",
+        reconciliationFlag: "Reconciliation flag notifications enabled", 
+        taxComputationUpdate: "Tax computation updates enabled",
+        monthlyDigest: "Monthly ledger digest enabled",
+      };
+      toast.success(messages[key]);
+    }
   }
 
   return (

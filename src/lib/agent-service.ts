@@ -161,7 +161,14 @@ Response rules:
 - Structure: findings → figures table → status → recommended actions (numbered).
 - Only state numbers you can support from the provided data. Say clearly when information is missing rather than guessing.
 - Never reveal internal chain-of-thought; state conclusions and actions only.
-- Close with a one-line note that computations are indicative and should be verified before filing.`;
+- Close with a one-line note that computations are indicative and should be verified before filing.
+
+DUMMY DATA GENERATION:
+- If the user explicitly asks for dummy/random/sample data with no specific parameters, you are permitted to generate plausible synthetic values yourself.
+- When generating dummy data, create realistic values: reasonable tickers (e.g., OGDC, TCS, TRG for PSX; RELIANCE, TCS, INFY for NSE), realistic actions (BUY/SELL/DIV), reasonable quantities (10-1000 shares), realistic prices based on the market, and recent dates.
+- Clearly label any synthetic/dummy data as "SAMPLE DATA" or "DEMO DATA" in your response.
+- Propose dummy transactions the same way you would propose real transactions - with clear field values and confidence levels.
+- Do not refuse to generate dummy data when explicitly requested - this is a demo/testing feature.`;
 
 function fieldsSummary(a: AgentAttachment): string {
   if (!a.fields?.length) return "";
