@@ -54,12 +54,14 @@ function Pricing() {
   function handlePlanClick(planName: string) {
     if (planName === "Free") {
       navigate({ to: "/signup" });
-    } else if (planName === "Enterprise") {
-      // For enterprise, show contact info or redirect to contact page
-      window.location.href = "mailto:sales@auditx.demo?subject=Enterprise Plan Inquiry";
     } else {
-      // For Pro plan, navigate to signup with plan selection
-      navigate({ to: "/signup", search: { plan: "pro" } });
+      const subject = encodeURIComponent(`AuditX Plan Inquiry: ${planName}`);
+      const body = encodeURIComponent(`Hi AuditX Team,
+
+I am interested in the ${planName} plan.
+
+Please send me more details on how to get started.`);
+      window.location.href = `mailto:sales@auditx.demo?subject=${subject}&body=${body}`;
     }
   }
 

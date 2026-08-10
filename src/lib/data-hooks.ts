@@ -137,3 +137,80 @@ export function useResolveFlag() {
     },
   });
 }
+
+// ── Broker Connections ────────────────────────────────────────────────────────
+
+export function useBrokerConnections(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["broker_connections", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("broker_accounts")
+        .select("*")
+        .eq("org_id", orgId!);
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  });
+}
+
+export function useConnectBroker() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orgId, brokerName }: { orgId: string; brokerName: string }) => {
+      // Simulate OAuth delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const { data, error } = await supabase
+        .from("broker_accounts")
+        .insert({
+          org_id: orgId,
+          name: `${brokerName} Account`,
+          broker_name: brokerName,
+          currency: "PKR",
+          exchange: "PSX",
+          status: "active",
+        } as any) // Status might not be in the type yet
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (_, { orgId }) => {
+      qc.invalidateQueries({ queryKey: ["broker_connections", orgId] });
+    },
+  });
+}
+
+// ── Universal File Import Hook ────────────────────────────────────────────────
+
+import { parseDocument, parseTextDocument } from "./ai-service";
+
+export function useUniversalImport() {
+  const qc = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ file, orgId }: { file: File; orgId: string }) => {
+      const isText = file.type.includes("text") || file.type.includes("csv") || file.name.endsWith(".csv");
+      
+      let result;
+      if (isText) {
+        const text = await file.text();
+        result = await parseTextDocument(text, file.name);
+      } else {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+          reader.readAsDataURL(file);
+        });
+        const base64 = await base64Promise;
+        result = await parseDocument(base64, file.type || "application/pdf", file.name);
+      }
+      
+      return result;
+    },
+  });
+}

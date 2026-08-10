@@ -21,6 +21,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AppAgentRouteImport } from './routes/app.agent'
 import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
@@ -31,6 +32,7 @@ import { Route as AppReconciliationRouteImport } from './routes/app.reconciliati
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppTaxRouteImport } from './routes/app.tax'
+import { Route as AppParserThreadIdRouteImport } from './routes/app.parser.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -92,6 +94,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppAgentRoute = AppAgentRouteImport.update({
   id: '/agent',
   path: '/agent',
@@ -142,6 +149,11 @@ const AppTaxRoute = AppTaxRouteImport.update({
   path: '/tax',
   getParentRoute: () => AppRoute,
 } as any)
+const AppParserThreadIdRoute = AppParserThreadIdRouteImport.update({
+  id: '/$threadId',
+  path: '/$threadId',
+  getParentRoute: () => AppParserRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -156,16 +168,18 @@ export interface FileRoutesByFullPath {
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/api/chat': typeof ApiChatRoute
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
-  '/app/parser': typeof AppParserRoute
+  '/app/parser': typeof AppParserRouteWithChildren
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+  '/app/parser/$threadId': typeof AppParserThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -180,16 +194,18 @@ export interface FileRoutesByTo {
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/api/chat': typeof ApiChatRoute
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
-  '/app/parser': typeof AppParserRoute
+  '/app/parser': typeof AppParserRouteWithChildren
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+  '/app/parser/$threadId': typeof AppParserThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -205,16 +221,18 @@ export interface FileRoutesById {
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/api/chat': typeof ApiChatRoute
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
-  '/app/parser': typeof AppParserRoute
+  '/app/parser': typeof AppParserRouteWithChildren
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+  '/app/parser/$threadId': typeof AppParserThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -231,6 +249,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/signin'
     | '/signup'
+    | '/api/chat'
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
@@ -241,6 +260,7 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+    | '/app/parser/$threadId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -255,6 +275,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/signin'
     | '/signup'
+    | '/api/chat'
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
@@ -265,6 +286,7 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+    | '/app/parser/$threadId'
   id:
     | '__root__'
     | '/'
@@ -279,6 +301,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/signin'
     | '/signup'
+    | '/api/chat'
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
@@ -289,6 +312,7 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+    | '/app/parser/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -304,6 +328,7 @@ export interface RootRouteChildren {
   SecurityRoute: typeof SecurityRoute
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
+  ApiChatRoute: typeof ApiChatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -392,6 +417,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/agent': {
       id: '/app/agent'
       path: '/agent'
@@ -462,8 +494,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTaxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/parser/$threadId': {
+      id: '/app/parser/$threadId'
+      path: '/$threadId'
+      fullPath: '/app/parser/$threadId'
+      preLoaderRoute: typeof AppParserThreadIdRouteImport
+      parentRoute: typeof AppParserRoute
+    }
   }
 }
+
+interface AppParserRouteChildren {
+  AppParserThreadIdRoute: typeof AppParserThreadIdRoute
+}
+
+const AppParserRouteChildren: AppParserRouteChildren = {
+  AppParserThreadIdRoute: AppParserThreadIdRoute,
+}
+
+const AppParserRouteWithChildren = AppParserRoute._addFileChildren(
+  AppParserRouteChildren,
+)
 
 interface AppRouteChildren {
   AppAgentRoute: typeof AppAgentRoute
@@ -471,7 +522,7 @@ interface AppRouteChildren {
   AppBillingRoute: typeof AppBillingRoute
   AppLedgerRoute: typeof AppLedgerRoute
   AppOverviewRoute: typeof AppOverviewRoute
-  AppParserRoute: typeof AppParserRoute
+  AppParserRoute: typeof AppParserRouteWithChildren
   AppReconciliationRoute: typeof AppReconciliationRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -484,7 +535,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBillingRoute: AppBillingRoute,
   AppLedgerRoute: AppLedgerRoute,
   AppOverviewRoute: AppOverviewRoute,
-  AppParserRoute: AppParserRoute,
+  AppParserRoute: AppParserRouteWithChildren,
   AppReconciliationRoute: AppReconciliationRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -506,17 +557,8 @@ const rootRouteChildren: RootRouteChildren = {
   SecurityRoute: SecurityRoute,
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
+  ApiChatRoute: ApiChatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

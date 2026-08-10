@@ -13,13 +13,13 @@ export const Route = createFileRoute("/app/billing")({
 const plans = [
   {
     name: "Free",
-    price: "$0",
+    price: "bash",
     note: "50 parsed transactions / month",
     items: ["1 tax profile", "CSV export", "Community support"],
   },
   {
     name: "Pro",
-    price: "$9.99",
+    price: ".99",
     note: "For active retail traders",
     popular: true,
     items: [
@@ -31,7 +31,7 @@ const plans = [
   },
   {
     name: "Enterprise",
-    price: "$49",
+    price: "9",
     note: "Brokerages & portfolio managers",
     items: [
       "Multi-client accounts",
@@ -44,9 +44,9 @@ const plans = [
 ];
 
 const invoices = [
-  { id: "INV-2025-08", date: "Aug 1, 2025", amount: "$9.99", status: "Paid" },
-  { id: "INV-2025-07", date: "Jul 1, 2025", amount: "$9.99", status: "Paid" },
-  { id: "INV-2025-06", date: "Jun 1, 2025", amount: "$9.99", status: "Paid" },
+  { id: "INV-2025-08", date: "Aug 1, 2025", amount: ".99", status: "Paid" },
+  { id: "INV-2025-07", date: "Jul 1, 2025", amount: ".99", status: "Paid" },
+  { id: "INV-2025-06", date: "Jun 1, 2025", amount: ".99", status: "Paid" },
 ];
 
 function Billing() {
@@ -54,11 +54,10 @@ function Billing() {
   const navigate = useNavigate();
 
   const usedTx = 31;
-  const limitTx = user?.plan === "free" ? 50 : null;
+  const limitTx = (user as any)?.plan === "free" ? 50 : null;
 
   function handleManagePayment() {
     toast.info("Payment management would open Stripe Customer Portal in production");
-    // In production: window.location.href = stripeCustomerPortalUrl;
   }
 
   function handleUpgrade() {
@@ -66,17 +65,14 @@ function Billing() {
   }
 
   function handlePlanUpgrade(planName: string) {
-    if (planName === "Enterprise") {
-      window.location.href = "mailto:sales@auditx.demo?subject=Enterprise Plan Upgrade";
-    } else {
-      toast.info(`Upgrade to ${planName} would redirect to Stripe Checkout in production`);
-      // In production: redirect to Stripe Checkout
-    }
+    const subject = encodeURIComponent(`AuditX Plan Upgrade: ${planName}`);
+    const body = encodeURIComponent(`Hi AuditX Team,\n\nI would like to upgrade my organisation to the ${planName} plan.\n\nOrganisation ID: ${user?.id || "N/A"}`);
+    window.location.href = `mailto:billing@auditx.demo?subject=${subject}&body=${body}`;
+    toast.info(`Redirecting to your email client to complete the ${planName} upgrade...`);
   }
 
   function handleDownloadInvoice(invoiceId: string) {
     toast.info(`Downloading invoice ${invoiceId}...`);
-    // In production: download actual PDF from Stripe
   }
 
   return (
@@ -88,19 +84,18 @@ function Billing() {
         </p>
       </div>
 
-      {/* Current plan */}
       <Panel>
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium" style={{ color: "var(--ink-3)" }}>CURRENT PLAN</p>
             <div className="mt-1 flex items-center gap-2">
-              <p className="text-xl font-semibold capitalize">{user?.plan ?? "Pro"}</p>
-              <StatusPill tone={user?.plan === "free" ? "warn" : "ok"}>
-                {user?.plan === "free" ? "Free" : user?.plan === "pro" ? "Active" : "Enterprise"}
+              <p className="text-xl font-semibold capitalize">{(user as any)?.plan ?? "Pro"}</p>
+              <StatusPill tone={(user as any)?.plan === "free" ? "warn" : "ok"}>
+                {(user as any)?.plan === "free" ? "Free" : (user as any)?.plan === "pro" ? "Active" : "Enterprise"}
               </StatusPill>
             </div>
             <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
-              {user?.plan === "free" ? "Free forever, 50 tx/mo limit" : "Renews Sep 1, 2025 · $9.99/mo"}
+              {(user as any)?.plan === "free" ? "Free forever, 50 tx/mo limit" : "Renews Sep 1, 2025 · $9.99/mo"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -108,7 +103,7 @@ function Billing() {
               <CreditCard size={15} strokeWidth={1.75} />
               Manage payment
             </Btn>
-            {user?.plan === "free" && (
+            {(user as any)?.plan === "free" && (
               <Btn onClick={handleUpgrade}>
                 <Zap size={15} strokeWidth={1.75} />
                 Upgrade to Pro
@@ -117,7 +112,6 @@ function Billing() {
           </div>
         </div>
 
-        {/* Usage meter */}
         {limitTx && (
           <div className="mt-6">
             <div className="flex justify-between text-xs" style={{ color: "var(--ink-2)" }}>
@@ -139,7 +133,6 @@ function Billing() {
         )}
       </Panel>
 
-      {/* Plan comparison */}
       <div>
         <p className="mb-4 text-sm font-semibold">Available Plans</p>
         <div className="grid gap-4 md:grid-cols-3">
@@ -182,21 +175,21 @@ function Billing() {
                 </ul>
                 <Btn
                   variant={
-                    (user?.plan ?? "pro") === plan.name.toLowerCase()
+                    ((user as any)?.plan ?? "pro") === plan.name.toLowerCase()
                       ? "secondary"
                       : plan.popular
                         ? "primary"
                         : "secondary"
                   }
                   className="mt-5 w-full"
-                  disabled={(user?.plan ?? "pro") === plan.name.toLowerCase()}
+                  disabled={((user as any)?.plan ?? "pro") === plan.name.toLowerCase()}
                   onClick={() => {
-                    if ((user?.plan ?? "pro") !== plan.name.toLowerCase()) {
+                    if (((user as any)?.plan ?? "pro") !== plan.name.toLowerCase()) {
                       handlePlanUpgrade(plan.name);
                     }
                   }}
                 >
-                  {(user?.plan ?? "pro") === plan.name.toLowerCase()
+                  {((user as any)?.plan ?? "pro") === plan.name.toLowerCase()
                     ? "Current plan"
                     : plan.name === "Enterprise"
                       ? "Contact sales"
@@ -208,7 +201,6 @@ function Billing() {
         </div>
       </div>
 
-      {/* Invoices */}
       <Panel>
         <p className="mb-4 text-sm font-semibold">Invoice History</p>
         <div
@@ -252,15 +244,13 @@ function Billing() {
         </div>
       </Panel>
 
-      {/* Demo notice */}
       <div
         className="flex items-start gap-2.5 rounded-2xl px-5 py-4 text-sm"
         style={{ background: "rgba(115,66,226,0.06)", border: "1px solid rgba(115,66,226,0.15)" }}
       >
         <ArrowUpRight size={15} strokeWidth={1.75} style={{ color: "var(--color-accent)", marginTop: 2, flexShrink: 0 }} />
         <p style={{ color: "var(--ink-2)" }}>
-          <strong>Demo Environment:</strong> Billing integration is simulated for this demo. 
-          In production, payments would be processed securely by Stripe with real checkout sessions and invoice generation.
+          <strong>Upgrade Process:</strong> To upgrade your plan, please contact our billing team via email. We will process your request and set up your subscription.
         </p>
       </div>
     </div>

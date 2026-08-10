@@ -84,7 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const orgName     = profile?.org_name || "My Organisation";
   const plan        = profile?.plan || "free";
   const initials    = displayName.charAt(0).toUpperCase();
-  const avatarUrl   = profile?.avatar_url || user?.user_metadata?.avatar_url as string | undefined;
+  const avatarUrl   = profile?.avatar_url || user?.user_metadata?.['avatar_url'] as string | undefined;
 
   function SidebarContent({ onClose }: { onClose?: () => void }) {
     return (
