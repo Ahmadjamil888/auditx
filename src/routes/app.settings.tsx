@@ -17,6 +17,7 @@ import { Btn, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { setNotificationPrefs } from "@/lib/notifications";
+import { useBrokerConnections, useConnectBroker } from "@/lib/data-hooks";
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
@@ -41,7 +42,15 @@ function Settings() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [connectingBroker, setConnectingBroker] = useState(false);
-  const [brokers, setBrokers] = useState<Array<{ id: string; name: string; type: string }>>([]);
+  
+  const { data: brokerData } = useBrokerConnections(profile?.org_id);
+  const connectBrokerMutation = useConnectBroker();
+  const brokers = (brokerData || []).map(b => ({
+    id: b.id,
+    name: b.name,
+    type: b.broker_name
+  }));
+
   const [notifications, setNotifications] = useState({
     lowConfidenceAlert: true,
     reconciliationFlag: true,
@@ -51,7 +60,7 @@ function Settings() {
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
   const initials = displayName.charAt(0).toUpperCase();
-  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url as string | undefined;
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.["avatar_url"] as string | undefined;
 
   async function save() {
     if (!profile?.org_id) return;
@@ -59,65 +68,39 @@ function Settings() {
     setSaving(true);
     try {
       const { error } = await supabase
-        .from("orgs")
+        .from("organizations")
         .update({ 
-          org_name: orgName,
-          jurisdiction: jurisdiction 
+          name: orgName,
+          jurisdiction_default: jurisdiction 
         })
         .eq("id", profile.org_id);
 
       if (error) throw error;
 
-      // Invalidate and refetch profile
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error("Failed to save settings:", error);
-      // You could add toast notification here
+      toast.error("Failed to save organization settings");
     } finally {
       setSaving(false);
     }
   }
 
   async function addBroker() {
+    if (!profile?.org_id) return;
     setConnectingBroker(true);
     try {
-      // Simulate broker connection flow - in production this would use Plaid/SnapTrade Link
-      // For demo purposes, we simulate the OAuth handshake delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock broker connection with realistic data
-      const { data, error } = await supabase
-        .from("broker_connections")
-        .insert({
-          org_id: profile?.org_id,
-          broker_name: "Meridian Capital", // Realistic broker name
-          connection_type: "oauth",
-          status: "active",
-          connected_at: new Date().toISOString(),
-          account_count: 2, // Simulate multiple accounts
-          last_sync: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setBrokers(prev => [...prev, { 
-        id: data.id, 
-        name: data.broker_name, 
-        type: data.connection_type 
-      }]);
-      
-      queryClient.invalidateQueries({ queryKey: ["broker_connections"] });
-      
-      // In production, this would trigger a real sync of transactions
-      console.log("[AuditX] Broker connected - would trigger transaction sync");
+      await connectBrokerMutation.mutateAsync({
+        orgId: profile.org_id,
+        brokerName: "Meridian Capital"
+      });
+      toast.success("Broker connected successfully");
     } catch (error) {
       console.error("Failed to add broker:", error);
-      alert("Failed to connect broker. Please try again.");
+      toast.error("Failed to connect broker. Please try again.");
     } finally {
       setConnectingBroker(false);
     }
@@ -128,7 +111,7 @@ function Settings() {
     
     try {
       const { error } = await supabase
-        .from("org_settings")
+        .from("org_settings" as any)
         .upsert({
           org_id: profile.org_id,
           notification_preferences: notifications,
@@ -140,18 +123,15 @@ function Settings() {
       toast.success("Notification preferences updated");
     } catch (error) {
       console.error("Failed to update notification settings:", error);
-      toast.error("Failed to update notification settings");
     }
   }
 
   function handleNotificationChange(key: keyof typeof notifications, value: boolean) {
-    setNotifications(prev => ({ ...prev, [key]: value }));
+    const newPrefs = { ...notifications, [key]: value };
+    setNotifications(newPrefs);
+    setNotificationPrefs(newPrefs);
     updateNotificationSettings();
     
-    // Update the notification system preferences
-    setNotificationPrefs(notifications);
-    
-    // Trigger a test notification for the changed setting
     if (value) {
       const messages: Record<keyof typeof notifications, string> = {
         lowConfidenceAlert: "Low-confidence extraction alerts enabled",
@@ -173,7 +153,6 @@ function Settings() {
       </div>
 
       <div className="flex gap-6">
-        {/* Tab rail */}
         <nav
           className="hidden w-44 shrink-0 rounded-2xl bg-white p-2 lg:block"
           style={{ border: "1px solid var(--hairline)", alignSelf: "start" }}
@@ -195,7 +174,6 @@ function Settings() {
           ))}
         </nav>
 
-        {/* Mobile tab strip */}
         <div className="w-full overflow-x-auto lg:hidden">
           <div className="flex gap-2 pb-2">
             {TABS.map(({ id, label }) => (
@@ -215,7 +193,6 @@ function Settings() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 space-y-4">
           {tab === "org" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
@@ -259,7 +236,6 @@ function Settings() {
                 </div>
               </Panel>
 
-              {/* Danger zone */}
               <Panel style={{ border: "1px solid rgba(214,69,69,0.2)" }}>
                 <p className="mb-2 text-sm font-semibold" style={{ color: "var(--bad)" }}>
                   Danger Zone
@@ -288,7 +264,7 @@ function Settings() {
                     { name: "PSX — Pakistan", key: "PSX", rules: "CGT 15% ST / 12.5% LT, Filer WHT 10%" },
                     { name: "NSE — India",    key: "NSE", rules: "STCG 20%, LTCG 12.5% (post Budget 2024)" },
                   ].map((p) => {
-                    const isActive = (profile?.jurisdiction ?? "PSX") === p.key;
+                    const isActive = jurisdiction === p.key;
                     return (
                       <div
                         key={p.name}
@@ -383,7 +359,6 @@ function Settings() {
                   </Btn>
                 </div>
                 <div className="space-y-3">
-                  {/* Only the real logged-in user */}
                   <div
                     className="flex items-center gap-3 rounded-xl px-4 py-3"
                     style={{ background: "var(--color-login-bg)" }}
@@ -397,14 +372,6 @@ function Settings() {
                           src={avatarUrl} 
                           alt={displayName}
                           className="size-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const parent = e.currentTarget.parentElement;
-                            if (parent) {
-                              parent.style.background = "var(--color-accent)";
-                              parent.textContent = initials;
-                            }
-                          }}
                         />
                       ) : (
                         initials
@@ -437,28 +404,20 @@ function Settings() {
                   {[
                     { key: "lowConfidenceAlert" as const, label: "Low-confidence extraction alert", desc: "When a parsed field falls below 0.75" },
                     { key: "reconciliationFlag" as const, label: "Reconciliation flag detected", desc: "When a discrepancy is found" },
-                    { key: "taxComputationUpdate" as const, label: "Tax computation updated", desc: "When new transactions affect your CGT" },
-                    { key: "monthlyDigest" as const, label: "Monthly ledger digest", desc: "Summary of activity at end of month" },
+                    { key: "taxComputationUpdate" as const, label: "Tax computation update", desc: "When new gains are computed" },
+                    { key: "monthlyDigest" as const, label: "Monthly ledger digest", desc: "Summary of your monthy performance" },
                   ].map((n) => (
-                    <div key={n.key} className="flex items-start justify-between gap-4">
+                    <div key={n.key} className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium">{n.label}</p>
                         <p className="text-xs" style={{ color: "var(--ink-3)" }}>{n.desc}</p>
                       </div>
-                      <label className="relative inline-flex cursor-pointer items-center">
-                        <input 
-                          type="checkbox" 
-                          checked={notifications[n.key]}
-                          onChange={(e) => handleNotificationChange(n.key, e.target.checked)}
-                          className="sr-only peer" 
-                        />
-                        <div
-                          className="h-5 w-9 rounded-full peer-checked:after:translate-x-4 after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform"
-                          style={{
-                            background: notifications[n.key] ? "var(--color-accent)" : "var(--color-sheet)",
-                          }}
-                        />
-                      </label>
+                      <input
+                        type="checkbox"
+                        checked={notifications[n.key]}
+                        onChange={(e) => handleNotificationChange(n.key, e.target.checked)}
+                        className="size-4 rounded accent-[var(--color-accent)]"
+                      />
                     </div>
                   ))}
                 </div>

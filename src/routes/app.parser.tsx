@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUniversalImport } from "@/lib/data-hooks";
 import { Panel, StatusPill } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 import { GoogleGenAI } from "@google/genai";
@@ -61,7 +62,7 @@ async function toAttachment(file: File): Promise<Attachment> {
 }
 
 function getAI(): GoogleGenAI {
-  const key = (import.meta.env.VITE_GOOGLE_AI_API_KEY as string | undefined) ?? "";
+  const key = (import.meta.env['VITE_GOOGLE_AI_API_KEY'] as string | undefined) ?? "";
   if (!key || key.length < 10) throw new Error("VITE_GOOGLE_AI_API_KEY not set in .env");
   return new GoogleGenAI({ apiKey: key });
 }
@@ -275,6 +276,7 @@ function Parser() {
   const [input,        setInput]        = useState("");
   const [attachments,  setAttachments]  = useState<Attachment[]>([]);
   const [busy,         setBusy]         = useState(false);
+  const importMutation = useUniversalImport();
   const [parseStep,    setParseStep]    = useState<"idle"|"uploading"|"extracting"|"ready"|"error">("idle");
   const [parseFile,    setParseFile]    = useState("");
   const [parseFields,  setParseFields]  = useState<ExtractedField[]>([]);
@@ -305,19 +307,22 @@ function Parser() {
 
   // ── Document extraction pipeline ────────────────────────────────────────────
   async function runExtract(file: File) {
-    setParseStep("uploading"); setParseFile(file.name);
-    setParseFields([]); setParseErr("");
+    if (!profile?.org_id) return;
+    setParseStep("uploading");
+    setParseFile(file.name);
+    setParseFields([]);
+    setParseErr("");
+    
     try {
       setParseStep("extracting");
       const att = await toAttachment(file);
-      const result = att.text
-        ? await parseTextDocument(att.text, file.name)
-        : await parseDocument(att.base64 ?? "", att.mimeType, file.name);
+      const result = await importMutation.mutateAsync({ file, orgId: profile.org_id });
+      
       setParseFields(result.fields);
       setParseStep("ready");
-      // Also add the file as an attachment to include in the next chat message
       setAttachments((p) => [...p, att]);
     } catch (err) {
+      console.error("[Parser] Import failed:", err);
       setParseErr((err as Error).message);
       setParseStep("error");
     }
@@ -554,7 +559,7 @@ function Parser() {
     setParseStep("idle"); setParseFields([]); setParseErr("");
   }
 
-  const apiKeyMissing = !import.meta.env.VITE_GOOGLE_AI_API_KEY;
+  const apiKeyMissing = !import.meta.env['VITE_GOOGLE_AI_API_KEY'];
   const isEmpty = messages.length === 0;
 
   return (
