@@ -312,13 +312,28 @@ function Settings() {
                   Deleting your organisation permanently removes all transactions, tax computations,
                   and audit logs. This action cannot be undone.
                 </p>
+                <input
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder={`Type "${profile?.org_name ?? ""}" to confirm`}
+                  className="mb-3 w-full rounded-[10px] border bg-white px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--hairline)", maxWidth: 400 }}
+                />
                 <Btn
                   variant="ghost"
+                  onClick={deleteOrganisation}
+                  disabled={deletingOrg}
                   className="!text-[var(--bad)] border border-[var(--bad)]/30 hover:!bg-red-50"
                 >
-                  <Trash2 size={15} strokeWidth={1.75} />
+                  {deletingOrg ? (
+                    <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={15} strokeWidth={1.75} />
+                  )}
                   Delete organisation
                 </Btn>
+
               </Panel>
             </motion.div>
           )}
