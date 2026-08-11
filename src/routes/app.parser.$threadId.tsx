@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-// import { ParserWorkspace } from "@/components/agent/ParserWorkspace";
+import { ParserWorkspace } from "@/components/agent/ParserWorkspace";
 
 export const Route = createFileRoute("/app/parser/$threadId")({
   head: () => ({
     meta: [
       { title: "Audit Workspace | AuditX" },
-      { name: "description", content: "Review broker documents, reconcile trades, and approve ledger updates with the AuditX agent." },
+      {
+        name: "description",
+        content: "Review broker documents, reconcile trades, and approve ledger updates with the AuditX agent.",
+      },
       { property: "og:title", content: "Audit Workspace | AuditX" },
       { property: "og:description", content: "AI-assisted trade reconciliation with approval-gated ledger execution." },
       { property: "og:type", content: "website" },
@@ -17,5 +20,5 @@ export const Route = createFileRoute("/app/parser/$threadId")({
 
 function ThreadPage() {
   const { threadId } = Route.useParams();
-  return /* <ParserWorkspace key={threadId} threadId={threadId} /> */;
+  return <ParserWorkspace key={threadId} threadId={threadId} />;
 }
