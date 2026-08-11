@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -17,7 +17,14 @@ import { Btn, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { setNotificationPrefs } from "@/lib/notifications";
-import { useBrokerConnections, useConnectBroker } from "@/lib/data-hooks";
+import { limitLabel, withinLimit } from "@/lib/plans";
+import {
+  useBrokerConnections,
+  useConnectBroker,
+  useDeleteBroker,
+  useDeleteOrganization,
+} from "@/lib/data-hooks";
+
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
@@ -34,7 +41,8 @@ const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
 ];
 
 function Settings() {
-  const { profile, user } = useAuth();
+  const { profile, user, signOut } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("org");
   const [orgName, setOrgName] = useState(profile?.org_name ?? "My Organisation");
@@ -42,14 +50,27 @@ function Settings() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [connectingBroker, setConnectingBroker] = useState(false);
-  
+  const [brokerFormOpen, setBrokerFormOpen] = useState(false);
+  const [brokerForm, setBrokerForm] = useState({
+    name: "",
+    broker_name: "",
+    currency: "PKR",
+    exchange: "PSX",
+    external_ref: "",
+  });
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deletingOrg, setDeletingOrg] = useState(false);
+
   const { data: brokerData } = useBrokerConnections(profile?.org_id);
   const connectBrokerMutation = useConnectBroker();
-  const brokers = (brokerData || []).map(b => ({
+  const deleteBrokerMutation = useDeleteBroker();
+  const deleteOrgMutation = useDeleteOrganization();
+  const brokers = (brokerData || []).map((b) => ({
     id: b.id,
     name: b.name,
-    type: b.broker_name
+    type: b.broker_name,
   }));
+
 
   const [notifications, setNotifications] = useState({
     lowConfidenceAlert: true,
@@ -91,20 +112,67 @@ function Settings() {
 
   async function addBroker() {
     if (!profile?.org_id) return;
+    if (!brokerForm.broker_name.trim()) {
+      toast.error("Enter the broker name");
+      return;
+    }
+    if (!withinLimit(profile.plan, "brokerAccounts", brokers.length)) {
+      toast.error(`Your ${profile.plan.toUpperCase()} plan allows ${limitLabel(profile.plan, "brokerAccounts")} broker account(s).`, {
+        description: "Upgrade to connect more brokers.",
+      });
+      return;
+    }
     setConnectingBroker(true);
     try {
       await connectBrokerMutation.mutateAsync({
         orgId: profile.org_id,
-        brokerName: "Meridian Capital"
+        broker: {
+          name: brokerForm.name.trim() || `${brokerForm.broker_name.trim()} Account`,
+          broker_name: brokerForm.broker_name.trim(),
+          currency: brokerForm.currency,
+          exchange: brokerForm.exchange,
+          external_ref: brokerForm.external_ref.trim() || undefined,
+        },
       });
-      toast.success("Broker connected successfully");
+      toast.success("Broker account added");
+      setBrokerForm({ name: "", broker_name: "", currency: "PKR", exchange: "PSX", external_ref: "" });
+      setBrokerFormOpen(false);
     } catch (error) {
-      console.error("Failed to add broker:", error);
-      toast.error("Failed to connect broker. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to add broker");
     } finally {
       setConnectingBroker(false);
     }
   }
+
+  async function removeBroker(id: string) {
+    if (!profile?.org_id) return;
+    try {
+      await deleteBrokerMutation.mutateAsync({ id, orgId: profile.org_id });
+      toast.success("Broker account removed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove broker");
+    }
+  }
+
+  async function deleteOrganisation() {
+    if (!profile?.org_id) return;
+    if (deleteConfirm !== profile.org_name) {
+      toast.error("Type the organisation name exactly to confirm");
+      return;
+    }
+    setDeletingOrg(true);
+    try {
+      await deleteOrgMutation.mutateAsync({ orgId: profile.org_id });
+      toast.success("Organisation deleted");
+      await signOut();
+      navigate({ to: "/" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete organisation");
+    } finally {
+      setDeletingOrg(false);
+    }
+  }
+
 
   async function updateNotificationSettings() {
     if (!profile?.org_id) return;
@@ -244,13 +312,28 @@ function Settings() {
                   Deleting your organisation permanently removes all transactions, tax computations,
                   and audit logs. This action cannot be undone.
                 </p>
+                <input
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder={`Type "${profile?.org_name ?? ""}" to confirm`}
+                  className="mb-3 w-full rounded-[10px] border bg-white px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--hairline)", maxWidth: 400 }}
+                />
                 <Btn
                   variant="ghost"
+                  onClick={deleteOrganisation}
+                  disabled={deletingOrg}
                   className="!text-[var(--bad)] border border-[var(--bad)]/30 hover:!bg-red-50"
                 >
-                  <Trash2 size={15} strokeWidth={1.75} />
+                  {deletingOrg ? (
+                    <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={15} strokeWidth={1.75} />
+                  )}
                   Delete organisation
                 </Btn>
+
               </Panel>
             </motion.div>
           )}
@@ -299,20 +382,75 @@ function Settings() {
               <Panel>
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm font-semibold">Broker Accounts</p>
-                  <Btn variant="secondary" onClick={addBroker} disabled={connectingBroker}>
-                    {connectingBroker ? (
-                      <>
-                        <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
-                        Connecting...
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={15} strokeWidth={1.75} />
-                        Add broker
-                      </>
-                    )}
+                  <Btn variant="secondary" onClick={() => setBrokerFormOpen((v) => !v)}>
+                    <Plus size={15} strokeWidth={1.75} />
+                    {brokerFormOpen ? "Cancel" : "Add broker"}
                   </Btn>
                 </div>
+
+                {brokerFormOpen && (
+                  <div
+                    className="mb-4 grid gap-3 rounded-xl p-4 sm:grid-cols-2"
+                    style={{ background: "var(--color-login-bg)" }}
+                  >
+                    <input
+                      type="text"
+                      value={brokerForm.broker_name}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, broker_name: e.target.value })}
+                      placeholder="Broker name (e.g. AKD Securities)"
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    />
+                    <input
+                      type="text"
+                      value={brokerForm.name}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, name: e.target.value })}
+                      placeholder="Account label (optional)"
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    />
+                    <select
+                      value={brokerForm.exchange}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, exchange: e.target.value })}
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    >
+                      <option value="PSX">PSX</option>
+                      <option value="NSE">NSE</option>
+                    </select>
+                    <select
+                      value={brokerForm.currency}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, currency: e.target.value })}
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    >
+                      <option value="PKR">PKR</option>
+                      <option value="INR">INR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={brokerForm.external_ref}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, external_ref: e.target.value })}
+                      placeholder="Account / client code (optional)"
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none sm:col-span-2"
+                      style={{ borderColor: "var(--hairline)" }}
+                    />
+                    <div className="sm:col-span-2">
+                      <Btn onClick={addBroker} disabled={connectingBroker}>
+                        {connectingBroker ? (
+                          <>
+                            <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                            Adding…
+                          </>
+                        ) : (
+                          "Save broker account"
+                        )}
+                      </Btn>
+                    </div>
+                  </div>
+                )}
+
                 {brokers.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 gap-2">
                     <Key size={28} strokeWidth={1.5} style={{ color: "var(--ink-3)" }} />
@@ -334,16 +472,28 @@ function Settings() {
                           <p className="text-sm font-medium">{broker.name}</p>
                           <p className="text-xs" style={{ color: "var(--ink-3)" }}>{broker.type}</p>
                         </div>
-                        <span
-                          className="rounded-full px-2.5 py-1 text-xs font-medium"
-                          style={{ background: "rgba(31,157,99,0.1)", color: "var(--ok)" }}
-                        >
-                          Connected
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="rounded-full px-2.5 py-1 text-xs font-medium"
+                            style={{ background: "rgba(31,157,99,0.1)", color: "var(--ok)" }}
+                          >
+                            Connected
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${broker.name}`}
+                            onClick={() => removeBroker(broker.id)}
+                            className="rounded-lg p-1.5 hover:bg-red-50"
+                            style={{ color: "var(--bad)" }}
+                          >
+                            <Trash2 size={15} strokeWidth={1.75} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
+
               </Panel>
             </motion.div>
           )}
