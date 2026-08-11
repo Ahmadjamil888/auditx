@@ -91,20 +91,67 @@ function Settings() {
 
   async function addBroker() {
     if (!profile?.org_id) return;
+    if (!brokerForm.broker_name.trim()) {
+      toast.error("Enter the broker name");
+      return;
+    }
+    if (!withinLimit(profile.plan, "brokerAccounts", brokers.length)) {
+      toast.error(`Your ${profile.plan.toUpperCase()} plan allows ${limitLabel(profile.plan, "brokerAccounts")} broker account(s).`, {
+        description: "Upgrade to connect more brokers.",
+      });
+      return;
+    }
     setConnectingBroker(true);
     try {
       await connectBrokerMutation.mutateAsync({
         orgId: profile.org_id,
-        brokerName: "Meridian Capital"
+        broker: {
+          name: brokerForm.name.trim() || `${brokerForm.broker_name.trim()} Account`,
+          broker_name: brokerForm.broker_name.trim(),
+          currency: brokerForm.currency,
+          exchange: brokerForm.exchange,
+          external_ref: brokerForm.external_ref.trim() || undefined,
+        },
       });
-      toast.success("Broker connected successfully");
+      toast.success("Broker account added");
+      setBrokerForm({ name: "", broker_name: "", currency: "PKR", exchange: "PSX", external_ref: "" });
+      setBrokerFormOpen(false);
     } catch (error) {
-      console.error("Failed to add broker:", error);
-      toast.error("Failed to connect broker. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to add broker");
     } finally {
       setConnectingBroker(false);
     }
   }
+
+  async function removeBroker(id: string) {
+    if (!profile?.org_id) return;
+    try {
+      await deleteBrokerMutation.mutateAsync({ id, orgId: profile.org_id });
+      toast.success("Broker account removed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove broker");
+    }
+  }
+
+  async function deleteOrganisation() {
+    if (!profile?.org_id) return;
+    if (deleteConfirm !== profile.org_name) {
+      toast.error("Type the organisation name exactly to confirm");
+      return;
+    }
+    setDeletingOrg(true);
+    try {
+      await deleteOrgMutation.mutateAsync({ orgId: profile.org_id });
+      toast.success("Organisation deleted");
+      await signOut();
+      navigate({ to: "/" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete organisation");
+    } finally {
+      setDeletingOrg(false);
+    }
+  }
+
 
   async function updateNotificationSettings() {
     if (!profile?.org_id) return;
