@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -17,7 +17,14 @@ import { Btn, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { setNotificationPrefs } from "@/lib/notifications";
-import { useBrokerConnections, useConnectBroker } from "@/lib/data-hooks";
+import { limitLabel, withinLimit } from "@/lib/plans";
+import {
+  useBrokerConnections,
+  useConnectBroker,
+  useDeleteBroker,
+  useDeleteOrganization,
+} from "@/lib/data-hooks";
+
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
