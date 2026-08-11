@@ -34,7 +34,8 @@ const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
 ];
 
 function Settings() {
-  const { profile, user } = useAuth();
+  const { profile, user, signOut } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("org");
   const [orgName, setOrgName] = useState(profile?.org_name ?? "My Organisation");
@@ -42,14 +43,27 @@ function Settings() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [connectingBroker, setConnectingBroker] = useState(false);
-  
+  const [brokerFormOpen, setBrokerFormOpen] = useState(false);
+  const [brokerForm, setBrokerForm] = useState({
+    name: "",
+    broker_name: "",
+    currency: "PKR",
+    exchange: "PSX",
+    external_ref: "",
+  });
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deletingOrg, setDeletingOrg] = useState(false);
+
   const { data: brokerData } = useBrokerConnections(profile?.org_id);
   const connectBrokerMutation = useConnectBroker();
-  const brokers = (brokerData || []).map(b => ({
+  const deleteBrokerMutation = useDeleteBroker();
+  const deleteOrgMutation = useDeleteOrganization();
+  const brokers = (brokerData || []).map((b) => ({
     id: b.id,
     name: b.name,
-    type: b.broker_name
+    type: b.broker_name,
   }));
+
 
   const [notifications, setNotifications] = useState({
     lowConfidenceAlert: true,
