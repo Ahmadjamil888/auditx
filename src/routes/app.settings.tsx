@@ -382,20 +382,75 @@ function Settings() {
               <Panel>
                 <div className="mb-4 flex items-center justify-between">
                   <p className="text-sm font-semibold">Broker Accounts</p>
-                  <Btn variant="secondary" onClick={addBroker} disabled={connectingBroker}>
-                    {connectingBroker ? (
-                      <>
-                        <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
-                        Connecting...
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={15} strokeWidth={1.75} />
-                        Add broker
-                      </>
-                    )}
+                  <Btn variant="secondary" onClick={() => setBrokerFormOpen((v) => !v)}>
+                    <Plus size={15} strokeWidth={1.75} />
+                    {brokerFormOpen ? "Cancel" : "Add broker"}
                   </Btn>
                 </div>
+
+                {brokerFormOpen && (
+                  <div
+                    className="mb-4 grid gap-3 rounded-xl p-4 sm:grid-cols-2"
+                    style={{ background: "var(--color-login-bg)" }}
+                  >
+                    <input
+                      type="text"
+                      value={brokerForm.broker_name}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, broker_name: e.target.value })}
+                      placeholder="Broker name (e.g. AKD Securities)"
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    />
+                    <input
+                      type="text"
+                      value={brokerForm.name}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, name: e.target.value })}
+                      placeholder="Account label (optional)"
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    />
+                    <select
+                      value={brokerForm.exchange}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, exchange: e.target.value })}
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    >
+                      <option value="PSX">PSX</option>
+                      <option value="NSE">NSE</option>
+                    </select>
+                    <select
+                      value={brokerForm.currency}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, currency: e.target.value })}
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--hairline)" }}
+                    >
+                      <option value="PKR">PKR</option>
+                      <option value="INR">INR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={brokerForm.external_ref}
+                      onChange={(e) => setBrokerForm({ ...brokerForm, external_ref: e.target.value })}
+                      placeholder="Account / client code (optional)"
+                      className="rounded-[10px] border bg-white px-3.5 py-2.5 text-sm outline-none sm:col-span-2"
+                      style={{ borderColor: "var(--hairline)" }}
+                    />
+                    <div className="sm:col-span-2">
+                      <Btn onClick={addBroker} disabled={connectingBroker}>
+                        {connectingBroker ? (
+                          <>
+                            <Loader2 size={15} strokeWidth={1.75} className="animate-spin" />
+                            Adding…
+                          </>
+                        ) : (
+                          "Save broker account"
+                        )}
+                      </Btn>
+                    </div>
+                  </div>
+                )}
+
                 {brokers.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 gap-2">
                     <Key size={28} strokeWidth={1.5} style={{ color: "var(--ink-3)" }} />
@@ -417,16 +472,28 @@ function Settings() {
                           <p className="text-sm font-medium">{broker.name}</p>
                           <p className="text-xs" style={{ color: "var(--ink-3)" }}>{broker.type}</p>
                         </div>
-                        <span
-                          className="rounded-full px-2.5 py-1 text-xs font-medium"
-                          style={{ background: "rgba(31,157,99,0.1)", color: "var(--ok)" }}
-                        >
-                          Connected
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="rounded-full px-2.5 py-1 text-xs font-medium"
+                            style={{ background: "rgba(31,157,99,0.1)", color: "var(--ok)" }}
+                          >
+                            Connected
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${broker.name}`}
+                            onClick={() => removeBroker(broker.id)}
+                            className="rounded-lg p-1.5 hover:bg-red-50"
+                            style={{ color: "var(--bad)" }}
+                          >
+                            <Trash2 size={15} strokeWidth={1.75} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
+
               </Panel>
             </motion.div>
           )}
