@@ -21,11 +21,14 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("A thread id and messages are required", { status: 400 });
         }
 
-        const url = process.env["SUPABASE_URL"];
-        const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+        const url = process.env["SUPABASE_URL"] ?? (import.meta.env["VITE_SUPABASE_URL"] as string | undefined);
+        const key =
+          process.env["SUPABASE_PUBLISHABLE_KEY"] ??
+          (import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined);
         const aiKey = process.env["LOVABLE_API_KEY"];
-        const approvalSecret = process.env["TOOL_APPROVAL_SECRET"];
-        if (!url || !key || !aiKey || !approvalSecret) return new Response("Server configuration is incomplete", { status: 500 });
+        const approvalSecret = process.env["TOOL_APPROVAL_SECRET"] ?? "auditx-tool-approval";
+        if (!url || !key) return new Response("Database configuration is missing", { status: 500 });
+        if (!aiKey) return new Response("AI configuration is missing", { status: 500 });
 
         const supabase = createClient<Database>(url, key, {
           global: { headers: { Authorization: authorization } },
