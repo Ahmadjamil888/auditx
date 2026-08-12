@@ -22,7 +22,7 @@ export const Route = createFileRoute("/app/parser")({
 });
 
 function ParserIndex() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const started = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -44,15 +44,36 @@ function ParserIndex() {
       return;
     }
 
-    const payload: { user_id: string; title: string; org_id?: string } = {
-      user_id: user.id,
-      title: "New audit",
-    };
-    if (profile?.org_id) payload.org_id = profile.org_id;
+    // RLS requires org_id to be one of the caller's organisations, so resolve it first.
+    let orgId = profile?.org_id ?? null;
+    if (!orgId) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      orgId = prof?.org_id ?? null;
+      if (!orgId) {
+        // Trigger self-provisioning of organisation + profile, then re-read.
+        await refreshProfile();
+        const { data: retry } = await supabase
+          .from("profiles")
+          .select("org_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        orgId = retry?.org_id ?? null;
+      }
+    }
+
+    if (!orgId) {
+      started.current = false;
+      setFailure("We couldn't find your workspace organisation yet. Try again in a moment.");
+      return;
+    }
 
     const { data: created, error } = await supabase
       .from("chat_threads")
-      .insert(payload as never)
+      .insert({ user_id: user.id, org_id: orgId, title: "New audit" } as never)
       .select("id")
       .single();
 
@@ -62,14 +83,14 @@ function ParserIndex() {
       return;
     }
     navigate({ to: "/app/parser/$threadId", params: { threadId: created.id }, replace: true });
-  }, [user, profile?.org_id, navigate]);
+  }, [user, profile?.org_id, navigate, refreshProfile]);
 
   useEffect(() => {
-    // Don't wait on organisation provisioning — a thread only needs the user.
     if (loading || !user || started.current) return;
     started.current = true;
     void open();
   }, [loading, user, open]);
+
 
   if (failure) {
     return (
