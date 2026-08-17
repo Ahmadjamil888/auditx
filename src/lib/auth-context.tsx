@@ -48,7 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = useCallback(async (u: User) => {
     try {
+      console.log("[AuditX] Auth session loaded, loading profile for user:", u.id);
+      
       // 1. Profile row (no cross-table embeds — profiles has no FK to subscriptions)
+      console.log("[AuditX] Loading profile...");
       let { data: row, error } = await supabase
         .from("profiles")
         .select("id, org_id, full_name, role")
@@ -56,19 +59,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (error) {
-        console.warn("[AuditX] profile lookup failed:", error.message);
+        console.error("[AuditX] Profile lookup failed:", error.message, error);
         return;
       }
 
+      console.log("[AuditX] Profile lookup result:", row ? "found" : "not found");
+
       // 2. Self-provision organisation + profile + free subscription on first login
       if (!row && !provisioning.current) {
+        console.log("[AuditX] No profile found, starting provisioning...");
         provisioning.current = true;
         row = await provision(u);
         provisioning.current = false;
+        console.log("[AuditX] Provisioning completed, result:", row ? "success" : "failed");
       }
-      if (!row) return;
+      if (!row) {
+        console.warn("[AuditX] No profile available after provisioning attempt");
+        return;
+      }
+
+      console.log("[AuditX] Profile loaded, org_id:", row.org_id);
 
       // 3. Organisation + subscription, fetched independently
+      console.log("[AuditX] Loading organization and subscription...");
       const [orgRes, subRes] = await Promise.all([
         supabase
           .from("organizations")
@@ -82,14 +95,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .maybeSingle(),
       ]);
 
+      if (orgRes.error) {
+        console.error("[AuditX] Organization lookup failed:", orgRes.error.message, orgRes.error);
+      } else {
+        console.log("[AuditX] Organization loaded:", orgRes.data ? "found" : "not found");
+      }
+
+      if (subRes.error) {
+        console.error("[AuditX] Subscription lookup failed:", subRes.error.message, subRes.error);
+      } else {
+        console.log("[AuditX] Subscription loaded:", subRes.data ? "found" : "not found");
+      }
+
       // Default plan is always free when no subscription row exists yet.
       if (!subRes.data) {
+        console.log("[AuditX] No subscription found, creating free subscription...");
         await supabase
           .from("subscriptions")
           .insert({ org_id: row.org_id, plan: "free", status: "active" })
-          .then(() => undefined, () => undefined);
+          .then(() => {
+            console.log("[AuditX] Free subscription created successfully");
+          }, (err) => {
+            console.error("[AuditX] Failed to create free subscription:", err.message, err);
+          });
       }
 
+      console.log("[AuditX] Setting profile state...");
       setProfile({
         profile_id: row.id,
         org_id: row.org_id,
@@ -101,15 +132,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         plan_status: subRes.data?.status ?? "active",
         avatar_url: u.user_metadata?.["avatar_url"] as string | undefined,
       });
+      console.log("[AuditX] Profile state set successfully");
     } catch (cause) {
-      console.warn("[AuditX] Could not load profile", cause);
+      console.error("[AuditX] Could not load profile:", cause);
     }
   }, []);
 
   async function provision(u: User) {
+    console.log("[AuditX] Starting provisioning for user:", u.id);
     const meta = u.user_metadata ?? {};
     const orgName = (meta["org_name"] as string | undefined) || `${u.email?.split("@")[0] ?? "My"} Organisation`;
 
+    console.log("[AuditX] Creating organization:", orgName);
     const { data: org, error: orgError } = await supabase
       .from("organizations")
       .insert({
@@ -120,10 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (orgError || !org) {
-      console.warn("[AuditX] Could not create organisation:", orgError?.message);
+      console.error("[AuditX] Could not create organisation:", orgError?.message, orgError);
       return null;
     }
 
+    console.log("[AuditX] Organization created successfully, id:", org.id);
+
+    console.log("[AuditX] Creating profile for user:", u.id);
     const { data: created, error: profileError } = await supabase
       .from("profiles")
       .insert({
@@ -136,15 +173,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (profileError || !created) {
-      console.warn("[AuditX] Could not create profile:", profileError?.message);
+      console.error("[AuditX] Could not create profile:", profileError?.message, profileError);
       return null;
     }
 
+    console.log("[AuditX] Profile created successfully, id:", created.id);
+
+    console.log("[AuditX] Creating subscription for org:", org.id);
     await supabase
       .from("subscriptions")
       .insert({ org_id: org.id, plan: "free", status: "active" })
-      .then(() => undefined, () => undefined);
+      .then(() => {
+        console.log("[AuditX] Subscription created successfully");
+      }, (err) => {
+        console.error("[AuditX] Failed to create subscription:", err.message, err);
+      });
 
+    console.log("[AuditX] Provisioning completed successfully");
     return created;
   }
 
@@ -154,28 +199,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   useEffect(() => {
+    console.log("[AuditX] AuthContext useEffect - getting initial session");
     supabase.auth.getSession().then(({ data }) => {
       const s = data.session;
+      console.log("[AuditX] Initial session result:", s ? "found" : "not found");
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        loadProfile(s.user).finally(() => setLoading(false));
+        console.log("[AuditX] User found in session, loading profile...");
+        loadProfile(s.user).finally(() => {
+          console.log("[AuditX] Profile loading completed, setting loading=false");
+          setLoading(false);
+        });
       } else {
+        console.log("[AuditX] No user in session, setting loading=false");
         setLoading(false);
       }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, s) => {
+      console.log("[AuditX] Auth state change:", event, "session:", !!s);
       setSession(s);
       setUser(s?.user ?? null);
       if (event === "SIGNED_OUT") {
+        console.log("[AuditX] User signed out, clearing profile");
         setProfile(null);
         return;
       }
-      if (s?.user) void loadProfile(s.user);
+      if (s?.user) {
+        console.log("[AuditX] Auth state change with user, loading profile...");
+        void loadProfile(s.user);
+      }
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      console.log("[AuditX] AuthContext cleanup");
+      listener.subscription.unsubscribe();
+    };
   }, [loadProfile]);
 
   async function handleSignOut() {

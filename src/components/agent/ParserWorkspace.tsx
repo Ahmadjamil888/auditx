@@ -29,6 +29,7 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
   const [initial, setInitial] = useState<UIMessage[] | null>(null);
 
   useEffect(() => {
+    console.log("[AuditX] ParserWorkspace loading thread:", threadId);
     let cancelled = false;
     void supabase
       .from("chat_messages")
@@ -37,7 +38,11 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
       .order("position")
       .then(({ data, error }) => {
         if (cancelled) return;
-        if (error) console.warn("[AuditX] chat history:", error.message);
+        if (error) {
+          console.error("[AuditX] Failed to load chat history:", error.message, error);
+        } else {
+          console.log("[AuditX] Chat history loaded:", data?.length ?? 0, "messages");
+        }
         setInitial(
           (data ?? []).map((row) => ({
             id: row.ai_message_id,
@@ -48,6 +53,7 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
       });
     return () => {
       cancelled = true;
+      console.log("[AuditX] ParserWorkspace cleanup for thread:", threadId);
     };
   }, [threadId]);
 
