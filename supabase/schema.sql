@@ -1,1604 +1,214 @@
--- ============================================================================
--- AUDITX — COMPLETE SUPABASE DATABASE RESET + REBUILD
--- ============================================================================
--- Run this entire script in:
--- Supabase Dashboard → SQL Editor → New Query
---
--- This script:
---   ✓ Completely rebuilds AuditX public tables
---   ✓ Removes old AuditX functions/triggers first
---   ✓ Recreates all tables before functions reference them
---   ✓ Enables RLS
---   ✓ Creates organization-scoped security policies
---   ✓ Creates automatic user provisioning
---   ✓ Creates/reuses private Storage bucket
---   ✓ Never directly deletes from storage.objects/storage.buckets
---   ✓ Uses a transaction so a failure does not leave a half-built schema
---
--- IMPORTANT:
---   Existing files in the trade-documents Storage bucket are preserved.
--- ============================================================================
-CREATE SCHEMA IF NOT EXISTS public;
-
-BEGIN;
-
-
--- ============================================================================
--- 1. EXTENSIONS
--- ============================================================================
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-
--- ============================================================================
--- 2. REMOVE OLD AUDITX AUTH TRIGGER
--- ============================================================================
---
--- auth.users belongs to Supabase Auth.
--- We only remove our own trigger.
--- ============================================================================
-
-DO $$
-BEGIN
-
-    IF EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = 'on_auth_user_created'
-          AND tgrelid = 'auth.users'::regclass
-          AND NOT tgisinternal
-    ) THEN
-
-        DROP TRIGGER on_auth_user_created
-        ON auth.users;
-
-    END IF;
-
-EXCEPTION
-    WHEN undefined_table THEN
-        NULL;
-END
-$$;
-
-
--- ============================================================================
--- 3. REMOVE OLD AUDITX FUNCTIONS
--- ============================================================================
---
--- Do this BEFORE dropping tables.
--- ============================================================================
-
-DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
-
-DROP FUNCTION IF EXISTS public.update_updated_at() CASCADE;
-
-DROP FUNCTION IF EXISTS public.user_org_ids() CASCADE;
-
-DROP FUNCTION IF EXISTS public.user_role_in_org(uuid) CASCADE;
-
-
--- ============================================================================
--- 4. REMOVE OLD AUDITX TABLES
--- ============================================================================
---
--- These are all public application tables.
---
--- Supabase system schemas such as auth and storage are NOT dropped.
--- ============================================================================
-
-DROP TABLE IF EXISTS public.notifications CASCADE;
-
-DROP TABLE IF EXISTS public.subscriptions CASCADE;
-
-DROP TABLE IF EXISTS public.audit_log CASCADE;
-
-DROP TABLE IF EXISTS public.tax_loss_harvest_suggestions CASCADE;
-
-DROP TABLE IF EXISTS public.tax_computations CASCADE;
-
-DROP TABLE IF EXISTS public.reconciliation_flags CASCADE;
-
-DROP TABLE IF EXISTS public.ledger_entries CASCADE;
-
-DROP TABLE IF EXISTS public.transactions CASCADE;
-
-DROP TABLE IF EXISTS public.documents CASCADE;
-
-DROP TABLE IF EXISTS public.broker_accounts CASCADE;
-
-DROP TABLE IF EXISTS public.tax_profiles CASCADE;
-
-DROP TABLE IF EXISTS public.profiles CASCADE;
-
-DROP TABLE IF EXISTS public.organizations CASCADE;
-
-
--- ============================================================================
--- 5. REMOVE OLD AUDITX STORAGE POLICIES
--- ============================================================================
---
--- IMPORTANT:
--- We do NOT delete from storage.buckets.
--- We do NOT delete from storage.objects.
---
--- Supabase protects these tables from direct SQL deletion.
--- ============================================================================
-
-DROP POLICY IF EXISTS "trade_documents_select"
-ON storage.objects;
-
-DROP POLICY IF EXISTS "trade_documents_insert"
-ON storage.objects;
-
-DROP POLICY IF EXISTS "trade_documents_update"
-ON storage.objects;
-
-DROP POLICY IF EXISTS "trade_documents_delete"
-ON storage.objects;
-
-
--- ============================================================================
--- 6. ORGANIZATIONS
--- ============================================================================
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
 CREATE TABLE public.organizations (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    name TEXT NOT NULL,
-
-    jurisdiction_default TEXT NOT NULL
-        DEFAULT 'PSX',
-
-    logo_url TEXT,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    updated_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  jurisdiction_default text NOT NULL DEFAULT 'PSX'::text,
+  logo_url text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT organizations_pkey PRIMARY KEY (id)
 );
-
-
-CREATE INDEX organizations_name_idx
-ON public.organizations(name);
-
-
--- ============================================================================
--- 7. PROFILES
--- ============================================================================
---
--- IMPORTANT:
--- profiles is deliberately created BEFORE any function references it.
--- ============================================================================
-
 CREATE TABLE public.profiles (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    user_id UUID NOT NULL
-        REFERENCES auth.users(id)
-        ON DELETE CASCADE,
-
-    full_name TEXT NOT NULL
-        DEFAULT '',
-
-    role TEXT NOT NULL
-        DEFAULT 'owner',
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    CONSTRAINT profiles_role_check
-        CHECK (
-            role IN (
-                'owner',
-                'admin',
-                'analyst',
-                'viewer'
-            )
-        ),
-
-    CONSTRAINT profiles_org_user_unique
-        UNIQUE(org_id, user_id)
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  full_name text NOT NULL DEFAULT ''::text,
+  role text NOT NULL DEFAULT 'owner'::text CHECK (role = ANY (ARRAY['owner'::text, 'admin'::text, 'analyst'::text, 'viewer'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-
-CREATE INDEX profiles_user_id_idx
-ON public.profiles(user_id);
-
-
-CREATE INDEX profiles_org_id_idx
-ON public.profiles(org_id);
-
-
--- ============================================================================
--- 8. TAX PROFILES
--- ============================================================================
-
 CREATE TABLE public.tax_profiles (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    jurisdiction TEXT NOT NULL,
-
-    filer_status TEXT NOT NULL
-        DEFAULT 'Filer',
-
-    cgt_rules JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    wht_rules JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    holding_period_tiers JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  jurisdiction text NOT NULL,
+  filer_status text NOT NULL DEFAULT 'Filer'::text,
+  cgt_rules jsonb NOT NULL DEFAULT '{}'::jsonb,
+  wht_rules jsonb NOT NULL DEFAULT '{}'::jsonb,
+  holding_period_tiers jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT tax_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT tax_profiles_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id)
 );
-
-
-CREATE INDEX tax_profiles_org_id_idx
-ON public.tax_profiles(org_id);
-
-
--- ============================================================================
--- 9. BROKER ACCOUNTS
--- ============================================================================
-
 CREATE TABLE public.broker_accounts (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    name TEXT NOT NULL,
-
-    broker_name TEXT NOT NULL,
-
-    currency TEXT NOT NULL
-        DEFAULT 'PKR',
-
-    exchange TEXT NOT NULL
-        DEFAULT 'PSX',
-
-    external_ref TEXT,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  name text NOT NULL,
+  broker_name text NOT NULL,
+  currency text NOT NULL DEFAULT 'PKR'::text,
+  exchange text NOT NULL DEFAULT 'PSX'::text,
+  external_ref text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT broker_accounts_pkey PRIMARY KEY (id),
+  CONSTRAINT broker_accounts_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id)
 );
-
-
-CREATE INDEX broker_accounts_org_id_idx
-ON public.broker_accounts(org_id);
-
-
--- ============================================================================
--- 10. DOCUMENTS
--- ============================================================================
-
 CREATE TABLE public.documents (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    broker_account_id UUID
-        REFERENCES public.broker_accounts(id)
-        ON DELETE SET NULL,
-
-    storage_path TEXT NOT NULL,
-
-    doc_type TEXT NOT NULL
-        DEFAULT 'trade_confirmation',
-
-    status TEXT NOT NULL
-        DEFAULT 'uploading',
-
-    extracted_data JSONB,
-
-    confidence_score NUMERIC(4,3),
-
-    uploaded_by UUID NOT NULL
-        REFERENCES auth.users(id),
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    CONSTRAINT documents_status_check
-        CHECK (
-            status IN (
-                'uploading',
-                'processing',
-                'done',
-                'failed'
-            )
-        )
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  broker_account_id uuid,
+  storage_path text NOT NULL,
+  doc_type text NOT NULL DEFAULT 'trade_confirmation'::text,
+  status text NOT NULL DEFAULT 'uploading'::text CHECK (status = ANY (ARRAY['uploading'::text, 'processing'::text, 'done'::text, 'failed'::text])),
+  extracted_data jsonb,
+  confidence_score numeric,
+  uploaded_by uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT documents_pkey PRIMARY KEY (id),
+  CONSTRAINT documents_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT documents_broker_account_id_fkey FOREIGN KEY (broker_account_id) REFERENCES public.broker_accounts(id),
+  CONSTRAINT documents_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES auth.users(id)
 );
-
-
-CREATE INDEX documents_org_id_idx
-ON public.documents(org_id);
-
-
-CREATE INDEX documents_status_idx
-ON public.documents(status);
-
-
-CREATE INDEX documents_broker_account_idx
-ON public.documents(broker_account_id);
-
-
--- ============================================================================
--- 11. TRANSACTIONS
--- ============================================================================
-
 CREATE TABLE public.transactions (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    broker_account_id UUID
-        REFERENCES public.broker_accounts(id)
-        ON DELETE SET NULL,
-
-    document_id UUID
-        REFERENCES public.documents(id)
-        ON DELETE SET NULL,
-
-    ticker TEXT NOT NULL,
-
-    action TEXT NOT NULL,
-
-    quantity NUMERIC NOT NULL,
-
-    price NUMERIC NOT NULL,
-
-    fees NUMERIC NOT NULL
-        DEFAULT 0,
-
-    wht NUMERIC NOT NULL
-        DEFAULT 0,
-
-    trade_date DATE NOT NULL,
-
-    ref_id TEXT NOT NULL
-        DEFAULT '',
-
-    confidence_score NUMERIC(4,3) NOT NULL
-        DEFAULT 1.0,
-
-    status TEXT NOT NULL
-        DEFAULT 'posted',
-
-    exchange TEXT NOT NULL
-        DEFAULT 'PSX',
-
-    broker TEXT NOT NULL
-        DEFAULT '',
-
-    source JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    CONSTRAINT transactions_action_check
-        CHECK (
-            action IN (
-                'BUY',
-                'SELL',
-                'DIV'
-            )
-        ),
-
-    CONSTRAINT transactions_status_check
-        CHECK (
-            status IN (
-                'posted',
-                'needs_review'
-            )
-        )
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  broker_account_id uuid,
+  document_id uuid,
+  ticker text NOT NULL,
+  action text NOT NULL CHECK (action = ANY (ARRAY['BUY'::text, 'SELL'::text, 'DIV'::text])),
+  quantity numeric NOT NULL,
+  price numeric NOT NULL,
+  fees numeric NOT NULL DEFAULT 0,
+  wht numeric NOT NULL DEFAULT 0,
+  trade_date date NOT NULL,
+  ref_id text NOT NULL DEFAULT ''::text,
+  confidence_score numeric NOT NULL DEFAULT 1.0,
+  status text NOT NULL DEFAULT 'posted'::text CHECK (status = ANY (ARRAY['posted'::text, 'needs_review'::text])),
+  exchange text NOT NULL DEFAULT 'PSX'::text,
+  broker text NOT NULL DEFAULT ''::text,
+  source jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT transactions_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT transactions_broker_account_id_fkey FOREIGN KEY (broker_account_id) REFERENCES public.broker_accounts(id),
+  CONSTRAINT transactions_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id)
 );
-
-
-CREATE INDEX transactions_org_id_idx
-ON public.transactions(org_id);
-
-
-CREATE INDEX transactions_ticker_idx
-ON public.transactions(ticker);
-
-
-CREATE INDEX transactions_trade_date_idx
-ON public.transactions(trade_date);
-
-
-CREATE INDEX transactions_status_idx
-ON public.transactions(status);
-
-
-CREATE INDEX transactions_broker_account_idx
-ON public.transactions(broker_account_id);
-
-
-CREATE INDEX transactions_document_idx
-ON public.transactions(document_id);
-
-
--- ============================================================================
--- 12. LEDGER ENTRIES
--- ============================================================================
-
 CREATE TABLE public.ledger_entries (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    broker_account_id UUID
-        REFERENCES public.broker_accounts(id)
-        ON DELETE SET NULL,
-
-    transaction_id UUID
-        REFERENCES public.transactions(id)
-        ON DELETE CASCADE,
-
-    entry_type TEXT NOT NULL,
-
-    amount NUMERIC NOT NULL,
-
-    balance_after NUMERIC NOT NULL
-        DEFAULT 0,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  broker_account_id uuid,
+  transaction_id uuid,
+  entry_type text NOT NULL,
+  amount numeric NOT NULL,
+  balance_after numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ledger_entries_pkey PRIMARY KEY (id),
+  CONSTRAINT ledger_entries_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT ledger_entries_broker_account_id_fkey FOREIGN KEY (broker_account_id) REFERENCES public.broker_accounts(id),
+  CONSTRAINT ledger_entries_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
 );
-
-
-CREATE INDEX ledger_entries_org_id_idx
-ON public.ledger_entries(org_id);
-
-
-CREATE INDEX ledger_entries_transaction_id_idx
-ON public.ledger_entries(transaction_id);
-
-
--- ============================================================================
--- 13. RECONCILIATION FLAGS
--- ============================================================================
-
 CREATE TABLE public.reconciliation_flags (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    broker_account_id UUID
-        REFERENCES public.broker_accounts(id)
-        ON DELETE SET NULL,
-
-    flag_type TEXT NOT NULL,
-
-    severity TEXT NOT NULL
-        DEFAULT 'warn',
-
-    ticker TEXT NOT NULL
-        DEFAULT '',
-
-    ref_id TEXT NOT NULL
-        DEFAULT '',
-
-    expected JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    actual JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    description TEXT NOT NULL
-        DEFAULT '',
-
-    suggested_resolution TEXT NOT NULL
-        DEFAULT '',
-
-    status TEXT NOT NULL
-        DEFAULT 'open',
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    CONSTRAINT reconciliation_severity_check
-        CHECK (
-            severity IN (
-                'ok',
-                'warn',
-                'bad'
-            )
-        ),
-
-    CONSTRAINT reconciliation_status_check
-        CHECK (
-            status IN (
-                'open',
-                'resolved',
-                'expected'
-            )
-        )
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  broker_account_id uuid,
+  flag_type text NOT NULL,
+  severity text NOT NULL DEFAULT 'warn'::text CHECK (severity = ANY (ARRAY['ok'::text, 'warn'::text, 'bad'::text])),
+  ticker text NOT NULL DEFAULT ''::text,
+  ref_id text NOT NULL DEFAULT ''::text,
+  expected jsonb NOT NULL DEFAULT '{}'::jsonb,
+  actual jsonb NOT NULL DEFAULT '{}'::jsonb,
+  description text NOT NULL DEFAULT ''::text,
+  suggested_resolution text NOT NULL DEFAULT ''::text,
+  status text NOT NULL DEFAULT 'open'::text CHECK (status = ANY (ARRAY['open'::text, 'resolved'::text, 'expected'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT reconciliation_flags_pkey PRIMARY KEY (id),
+  CONSTRAINT reconciliation_flags_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT reconciliation_flags_broker_account_id_fkey FOREIGN KEY (broker_account_id) REFERENCES public.broker_accounts(id)
 );
-
-
-CREATE INDEX reconciliation_flags_org_id_idx
-ON public.reconciliation_flags(org_id);
-
-
-CREATE INDEX reconciliation_flags_status_idx
-ON public.reconciliation_flags(status);
-
-
-CREATE INDEX reconciliation_flags_severity_idx
-ON public.reconciliation_flags(severity);
-
-
--- ============================================================================
--- 14. TAX COMPUTATIONS
--- ============================================================================
-
 CREATE TABLE public.tax_computations (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    tax_profile_id UUID
-        REFERENCES public.tax_profiles(id)
-        ON DELETE SET NULL,
-
-    tax_year TEXT NOT NULL,
-
-    jurisdiction TEXT NOT NULL
-        DEFAULT 'PSX',
-
-    filer_status TEXT NOT NULL
-        DEFAULT 'Filer',
-
-    short_term_gain NUMERIC NOT NULL
-        DEFAULT 0,
-
-    long_term_gain NUMERIC NOT NULL
-        DEFAULT 0,
-
-    dividend_wht NUMERIC NOT NULL
-        DEFAULT 0,
-
-    estimated_tax_due NUMERIC NOT NULL
-        DEFAULT 0,
-
-    breakdown JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    computed_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  tax_profile_id uuid,
+  tax_year text NOT NULL,
+  jurisdiction text NOT NULL DEFAULT 'PSX'::text,
+  filer_status text NOT NULL DEFAULT 'Filer'::text,
+  short_term_gain numeric NOT NULL DEFAULT 0,
+  long_term_gain numeric NOT NULL DEFAULT 0,
+  dividend_wht numeric NOT NULL DEFAULT 0,
+  estimated_tax_due numeric NOT NULL DEFAULT 0,
+  breakdown jsonb NOT NULL DEFAULT '{}'::jsonb,
+  computed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT tax_computations_pkey PRIMARY KEY (id),
+  CONSTRAINT tax_computations_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT tax_computations_tax_profile_id_fkey FOREIGN KEY (tax_profile_id) REFERENCES public.tax_profiles(id)
 );
-
-
-CREATE INDEX tax_computations_org_id_idx
-ON public.tax_computations(org_id);
-
-
-CREATE INDEX tax_computations_year_idx
-ON public.tax_computations(tax_year);
-
-
--- ============================================================================
--- 15. TAX LOSS HARVEST SUGGESTIONS
--- ============================================================================
-
 CREATE TABLE public.tax_loss_harvest_suggestions (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    position_ticker TEXT NOT NULL,
-
-    exchange TEXT NOT NULL
-        DEFAULT 'PSX',
-
-    unrealized_loss NUMERIC NOT NULL,
-
-    potential_offset NUMERIC NOT NULL,
-
-    holding_days INTEGER NOT NULL
-        DEFAULT 0,
-
-    rationale TEXT NOT NULL
-        DEFAULT '',
-
-    status TEXT NOT NULL
-        DEFAULT 'pending',
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    CONSTRAINT tax_loss_status_check
-        CHECK (
-            status IN (
-                'pending',
-                'applied',
-                'dismissed'
-            )
-        )
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  position_ticker text NOT NULL,
+  exchange text NOT NULL DEFAULT 'PSX'::text,
+  unrealized_loss numeric NOT NULL,
+  potential_offset numeric NOT NULL,
+  holding_days integer NOT NULL DEFAULT 0,
+  rationale text NOT NULL DEFAULT ''::text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'applied'::text, 'dismissed'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT tax_loss_harvest_suggestions_pkey PRIMARY KEY (id),
+  CONSTRAINT tax_loss_harvest_suggestions_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id)
 );
-
-
-CREATE INDEX tax_loss_harvest_org_id_idx
-ON public.tax_loss_harvest_suggestions(org_id);
-
-
--- ============================================================================
--- 16. AUDIT LOG
--- ============================================================================
-
 CREATE TABLE public.audit_log (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    actor TEXT NOT NULL,
-
-    action TEXT NOT NULL,
-
-    entity_type TEXT NOT NULL,
-
-    entity_id TEXT NOT NULL,
-
-    payload JSONB NOT NULL
-        DEFAULT '{}'::jsonb,
-
-    prev_hash TEXT NOT NULL
-        DEFAULT '',
-
-    hash TEXT NOT NULL,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  actor text NOT NULL,
+  action text NOT NULL,
+  entity_type text NOT NULL,
+  entity_id text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  prev_hash text NOT NULL DEFAULT ''::text,
+  hash text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT audit_log_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_log_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id)
 );
-
-
-CREATE INDEX audit_log_org_id_idx
-ON public.audit_log(org_id);
-
-
-CREATE INDEX audit_log_created_at_idx
-ON public.audit_log(created_at DESC);
-
-
--- Prevent UPDATE / DELETE on audit log.
-
-CREATE RULE audit_log_no_update
-AS ON UPDATE TO public.audit_log
-DO INSTEAD NOTHING;
-
-
-CREATE RULE audit_log_no_delete
-AS ON DELETE TO public.audit_log
-DO INSTEAD NOTHING;
-
-
--- ============================================================================
--- 17. SUBSCRIPTIONS
--- ============================================================================
-
 CREATE TABLE public.subscriptions (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    plan TEXT NOT NULL
-        DEFAULT 'free',
-
-    status TEXT NOT NULL
-        DEFAULT 'active',
-
-    stripe_customer_id TEXT,
-
-    stripe_subscription_id TEXT,
-
-    current_period_end TIMESTAMPTZ,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now(),
-
-    CONSTRAINT subscriptions_plan_check
-        CHECK (
-            plan IN (
-                'free',
-                'pro',
-                'enterprise'
-            )
-        ),
-
-    CONSTRAINT subscriptions_org_unique
-        UNIQUE(org_id)
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL UNIQUE,
+  plan text NOT NULL DEFAULT 'free'::text CHECK (plan = ANY (ARRAY['free'::text, 'pro'::text, 'enterprise'::text])),
+  status text NOT NULL DEFAULT 'active'::text,
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  current_period_end timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT subscriptions_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id)
 );
-
-
-CREATE INDEX subscriptions_org_id_idx
-ON public.subscriptions(org_id);
-
--- ============================================================================
--- 17A. AUDIT AGENT THREADS
--- ============================================================================
-
-CREATE TABLE public.chat_threads (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    title TEXT NOT NULL DEFAULT 'New audit',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.chat_threads TO authenticated;
-GRANT ALL ON public.chat_threads TO service_role;
-
-CREATE INDEX chat_threads_user_updated_idx ON public.chat_threads(user_id, updated_at DESC);
-
-CREATE TABLE public.chat_messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    thread_id UUID NOT NULL REFERENCES public.chat_threads(id) ON DELETE CASCADE,
-    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    ai_message_id TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-    parts JSONB NOT NULL DEFAULT '[]'::jsonb,
-    position INTEGER NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(thread_id, ai_message_id)
-);
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.chat_messages TO authenticated;
-GRANT ALL ON public.chat_messages TO service_role;
-
-CREATE INDEX chat_messages_thread_position_idx ON public.chat_messages(thread_id, position);
-
-
--- ============================================================================
--- 18. NOTIFICATIONS
--- ============================================================================
-
 CREATE TABLE public.notifications (
-
-    id UUID PRIMARY KEY
-        DEFAULT uuid_generate_v4(),
-
-    org_id UUID NOT NULL
-        REFERENCES public.organizations(id)
-        ON DELETE CASCADE,
-
-    user_id UUID NOT NULL
-        REFERENCES auth.users(id)
-        ON DELETE CASCADE,
-
-    type TEXT NOT NULL,
-
-    message TEXT NOT NULL,
-
-    read BOOLEAN NOT NULL
-        DEFAULT false,
-
-    created_at TIMESTAMPTZ NOT NULL
-        DEFAULT now()
-
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  type text NOT NULL,
+  message text NOT NULL,
+  read boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-
-CREATE INDEX notifications_user_id_idx
-ON public.notifications(user_id);
-
-
-CREATE INDEX notifications_org_id_idx
-ON public.notifications(org_id);
-
-
-CREATE INDEX notifications_read_idx
-ON public.notifications(read);
-
-
--- ============================================================================
--- 19. UPDATED_AT FUNCTION
--- ============================================================================
---
--- All required tables now exist.
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.update_updated_at()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-
-    NEW.updated_at = now();
-
-    RETURN NEW;
-
-END;
-$$;
-
-
-CREATE TRIGGER organizations_updated_at
-BEFORE UPDATE
-ON public.organizations
-FOR EACH ROW
-EXECUTE FUNCTION public.update_updated_at();
-
-
--- ============================================================================
--- 20. USER ORGANIZATION HELPER
--- ============================================================================
---
--- profiles DEFINITELY exists at this point.
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.user_org_ids()
-RETURNS SETOF UUID
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-SET search_path = public
-AS $$
-
-    SELECT org_id
-
-    FROM public.profiles
-
-    WHERE user_id = auth.uid();
-
-$$;
-
-
--- ============================================================================
--- 21. USER ROLE HELPER
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.user_role_in_org(
-    target_org UUID
-)
-RETURNS TEXT
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-SET search_path = public
-AS $$
-
-    SELECT role
-
-    FROM public.profiles
-
-    WHERE user_id = auth.uid()
-
-      AND org_id = target_org
-
-    LIMIT 1;
-
-$$;
-
-
--- ============================================================================
--- 22. ENABLE ROW LEVEL SECURITY
--- ============================================================================
-
-ALTER TABLE public.organizations
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.profiles
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.tax_profiles
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.broker_accounts
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.documents
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.transactions
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.ledger_entries
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.reconciliation_flags
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.tax_computations
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.tax_loss_harvest_suggestions
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.audit_log
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.subscriptions
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.chat_threads
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.chat_messages
-ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.notifications
-ENABLE ROW LEVEL SECURITY;
-
-
--- ============================================================================
--- 23. ORGANIZATION POLICIES
--- ============================================================================
-
-CREATE POLICY "org_select"
-ON public.organizations
-FOR SELECT
-TO authenticated
-USING (
-    id IN (
-        SELECT public.user_org_ids()
-    )
+CREATE TABLE public.chat_threads (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  org_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  title text NOT NULL DEFAULT 'New audit'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT chat_threads_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_threads_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT chat_threads_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-
-CREATE POLICY "org_insert"
-ON public.organizations
-FOR INSERT
-TO authenticated
-WITH CHECK (true);
-
-
-CREATE POLICY "org_update"
-ON public.organizations
-FOR UPDATE
-TO authenticated
-USING (
-    id IN (
-        SELECT public.user_org_ids()
-    )
-
-    AND public.user_role_in_org(id)
-        IN ('owner', 'admin')
+CREATE TABLE public.chat_messages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  thread_id uuid NOT NULL,
+  org_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  ai_message_id text NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])),
+  parts jsonb NOT NULL DEFAULT '[]'::jsonb,
+  position integer NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT chat_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.chat_threads(id),
+  CONSTRAINT chat_messages_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(id),
+  CONSTRAINT chat_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-
--- ============================================================================
--- 24. PROFILE POLICIES
--- ============================================================================
-
-CREATE POLICY "profile_select"
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING (
-    org_id IN (
-        SELECT public.user_org_ids()
-    )
-);
-
-
-CREATE POLICY "profile_insert"
-ON public.profiles
-FOR INSERT
-TO authenticated
-WITH CHECK (
-    org_id IN (
-        SELECT public.user_org_ids()
-    )
-);
-
-
-CREATE POLICY "profile_update"
-ON public.profiles
-FOR UPDATE
-TO authenticated
-USING (
-    org_id IN (
-        SELECT public.user_org_ids()
-    )
-
-    AND public.user_role_in_org(org_id)
-        IN ('owner', 'admin')
-);
-
-CREATE POLICY "chat_threads_owner_all"
-ON public.chat_threads
-FOR ALL
-TO authenticated
-USING (user_id = auth.uid() AND org_id IN (SELECT public.user_org_ids()))
-WITH CHECK (user_id = auth.uid() AND org_id IN (SELECT public.user_org_ids()));
-
-CREATE POLICY "chat_messages_owner_all"
-ON public.chat_messages
-FOR ALL
-TO authenticated
-USING (
-    user_id = auth.uid()
-    AND org_id IN (SELECT public.user_org_ids())
-    AND EXISTS (
-        SELECT 1 FROM public.chat_threads t
-        WHERE t.id = thread_id AND t.user_id = auth.uid()
-    )
-)
-WITH CHECK (
-    user_id = auth.uid()
-    AND org_id IN (SELECT public.user_org_ids())
-    AND EXISTS (
-        SELECT 1 FROM public.chat_threads t
-        WHERE t.id = thread_id AND t.user_id = auth.uid()
-    )
-);
-
-
--- ============================================================================
--- 25. GENERIC ORG-SCOPED POLICIES
--- ============================================================================
-
-DO $$
-
-DECLARE
-
-    t TEXT;
-
-BEGIN
-
-    FOREACH t IN ARRAY ARRAY[
-        'tax_profiles',
-        'broker_accounts',
-        'documents',
-        'transactions',
-        'ledger_entries',
-        'reconciliation_flags',
-        'tax_computations',
-        'tax_loss_harvest_suggestions',
-        'audit_log',
-        'subscriptions'
-    ]
-
-    LOOP
-
-        EXECUTE format(
-            'CREATE POLICY "%s_select"
-             ON public.%I
-             FOR SELECT
-             TO authenticated
-             USING (
-                 org_id IN (
-                     SELECT public.user_org_ids()
-                 )
-             )',
-            t,
-            t
-        );
-
-
-        EXECUTE format(
-            'CREATE POLICY "%s_insert"
-             ON public.%I
-             FOR INSERT
-             TO authenticated
-             WITH CHECK (
-                 org_id IN (
-                     SELECT public.user_org_ids()
-                 )
-             )',
-            t,
-            t
-        );
-
-
-        EXECUTE format(
-            'CREATE POLICY "%s_update"
-             ON public.%I
-             FOR UPDATE
-             TO authenticated
-             USING (
-                 org_id IN (
-                     SELECT public.user_org_ids()
-                 )
-
-                 AND public.user_role_in_org(org_id)
-                     IN (
-                         ''owner'',
-                         ''admin'',
-                         ''analyst''
-                     )
-             )',
-            t,
-            t
-        );
-
-
-        EXECUTE format(
-            'CREATE POLICY "%s_delete"
-             ON public.%I
-             FOR DELETE
-             TO authenticated
-             USING (
-                 org_id IN (
-                     SELECT public.user_org_ids()
-                 )
-
-                 AND public.user_role_in_org(org_id)
-                     IN (
-                         ''owner'',
-                         ''admin''
-                     )
-             )',
-            t,
-            t
-        );
-
-    END LOOP;
-
-END
-$$;
-
-
--- ============================================================================
--- 26. NOTIFICATION POLICIES
--- ============================================================================
-
-CREATE POLICY "notifications_select"
-ON public.notifications
-FOR SELECT
-TO authenticated
-USING (
-    user_id = auth.uid()
-);
-
-
-CREATE POLICY "notifications_insert"
-ON public.notifications
-FOR INSERT
-TO authenticated
-WITH CHECK (
-    org_id IN (
-        SELECT public.user_org_ids()
-    )
-);
-
-
-CREATE POLICY "notifications_update"
-ON public.notifications
-FOR UPDATE
-TO authenticated
-USING (
-    user_id = auth.uid()
-);
-
-
-CREATE POLICY "notifications_delete"
-ON public.notifications
-FOR DELETE
-TO authenticated
-USING (
-    user_id = auth.uid()
-);
-
-
--- ============================================================================
--- 27. AUTO-PROVISION NEW USERS
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-
-DECLARE
-
-    v_org_id UUID;
-
-    v_org_name TEXT;
-
-    v_jurisdiction TEXT;
-
-BEGIN
-
-    v_org_name :=
-        COALESCE(
-            NEW.raw_user_meta_data ->> 'org_name',
-            'My Organisation'
-        );
-
-
-    v_jurisdiction :=
-        COALESCE(
-            NEW.raw_user_meta_data ->> 'jurisdiction',
-            'PSX'
-        );
-
-
-    -- Create organization
-
-    INSERT INTO public.organizations (
-        name,
-        jurisdiction_default
-    )
-
-    VALUES (
-        v_org_name,
-        v_jurisdiction
-    )
-
-    RETURNING id
-    INTO v_org_id;
-
-
-    -- Create profile
-
-    INSERT INTO public.profiles (
-        org_id,
-        user_id,
-        full_name,
-        role
-    )
-
-    VALUES (
-        v_org_id,
-        NEW.id,
-        COALESCE(
-            NEW.raw_user_meta_data ->> 'full_name',
-            NEW.email,
-            ''
-        ),
-        'owner'
-    );
-
-
-    -- Create free subscription
-
-    INSERT INTO public.subscriptions (
-        org_id,
-        plan,
-        status
-    )
-
-    VALUES (
-        v_org_id,
-        'free',
-        'active'
-    );
-
-
-    -- Create default tax profile
-
-    INSERT INTO public.tax_profiles (
-        org_id,
-        jurisdiction,
-        filer_status,
-        cgt_rules,
-        wht_rules,
-        holding_period_tiers
-    )
-
-    VALUES (
-
-        v_org_id,
-
-        v_jurisdiction,
-
-        'Filer',
-
-        '{
-            "short_term_rate": 0.15,
-            "mid_term_rate": 0.125,
-            "long_term_rate": 0.0,
-            "short_threshold_days": 365,
-            "mid_threshold_days": 730
-        }'::jsonb,
-
-        '{
-            "filer_rate": 0.10,
-            "non_filer_rate": 0.125
-        }'::jsonb,
-
-        '{
-            "tiers": [
-                {
-                    "max_days": 365,
-                    "label": "Short-term"
-                },
-                {
-                    "max_days": 730,
-                    "label": "Mid-term"
-                },
-                {
-                    "max_days": null,
-                    "label": "Long-term"
-                }
-            ]
-        }'::jsonb
-
-    );
-
-
-    RETURN NEW;
-
-END;
-
-$$;
-
-
--- ============================================================================
--- 28. CREATE AUTH TRIGGER
--- ============================================================================
-
-CREATE TRIGGER on_auth_user_created
-
-AFTER INSERT
-
-ON auth.users
-
-FOR EACH ROW
-
-EXECUTE FUNCTION public.handle_new_user();
-
-
--- ============================================================================
--- 29. STORAGE BUCKET
--- ============================================================================
---
--- Reuse existing bucket.
--- Create it if missing.
---
--- NEVER DELETE FROM storage.buckets.
--- ============================================================================
-
-INSERT INTO storage.buckets (
-    id,
-    name,
-    public
-)
-
-VALUES (
-    'trade-documents',
-    'trade-documents',
-    false
-)
-
-ON CONFLICT (id)
-
-DO UPDATE SET
-    public = false;
-
-
--- ============================================================================
--- 30. STORAGE POLICIES
--- ============================================================================
-
-CREATE POLICY "trade_documents_select"
-
-ON storage.objects
-
-FOR SELECT
-
-TO authenticated
-
-USING (
-    bucket_id = 'trade-documents'
-);
-
-
-CREATE POLICY "trade_documents_insert"
-
-ON storage.objects
-
-FOR INSERT
-
-TO authenticated
-
-WITH CHECK (
-    bucket_id = 'trade-documents'
-);
-
-
-CREATE POLICY "trade_documents_update"
-
-ON storage.objects
-
-FOR UPDATE
-
-TO authenticated
-
-USING (
-    bucket_id = 'trade-documents'
-)
-
-WITH CHECK (
-    bucket_id = 'trade-documents'
-);
-
-
-CREATE POLICY "trade_documents_delete"
-
-ON storage.objects
-
-FOR DELETE
-
-TO authenticated
-
-USING (
-    bucket_id = 'trade-documents'
-);
-
-
--- ============================================================================
--- 31. VERIFICATION
--- ============================================================================
-
-DO $$
-
-DECLARE
-
-    required_table TEXT;
-
-    missing_count INTEGER;
-
-BEGIN
-
-    SELECT COUNT(*)
-
-    INTO missing_count
-
-    FROM (
-        VALUES
-            ('organizations'),
-            ('profiles'),
-            ('tax_profiles'),
-            ('broker_accounts'),
-            ('documents'),
-            ('transactions'),
-            ('ledger_entries'),
-            ('reconciliation_flags'),
-            ('tax_computations'),
-            ('tax_loss_harvest_suggestions'),
-            ('audit_log'),
-            ('subscriptions'),
-            ('notifications')
-    ) AS required(table_name)
-
-    WHERE NOT EXISTS (
-        SELECT 1
-
-        FROM information_schema.tables t
-
-        WHERE t.table_schema = 'public'
-
-          AND t.table_name = required.table_name
-    );
-
-
-    IF missing_count > 0 THEN
-
-        RAISE EXCEPTION
-            'AuditX verification failed: % required tables are missing.',
-            missing_count;
-
-    END IF;
-
-
-    RAISE NOTICE
-        'AuditX database verification successful.';
-
-END
-$$;
-
-
--- ============================================================================
--- 32. COMMIT
--- ============================================================================
-
-COMMIT;
-
-
--- ============================================================================
--- 33. FINAL STATUS
--- ============================================================================
-
-SELECT
-    'AuditX schema successfully rebuilt' AS status;
-
-
-SELECT
-    table_name
-
-FROM information_schema.tables
-
-WHERE table_schema = 'public'
-
-  AND table_name IN (
-      'organizations',
-      'profiles',
-      'tax_profiles',
-      'broker_accounts',
-      'documents',
-      'transactions',
-      'ledger_entries',
-      'reconciliation_flags',
-      'tax_computations',
-      'tax_loss_harvest_suggestions',
-      'audit_log',
-      'subscriptions',
-      'notifications'
-  )
-
-ORDER BY table_name;
-
-
-SELECT
-    id,
-    name,
-    public
-
-FROM storage.buckets
-
-WHERE id = 'trade-documents';

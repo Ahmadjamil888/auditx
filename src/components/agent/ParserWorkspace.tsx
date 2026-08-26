@@ -27,32 +27,76 @@ const SUGGESTIONS = [
 export function ParserWorkspace({ threadId }: { threadId: string }) {
   const { session } = useAuth();
   const [initial, setInitial] = useState<UIMessage[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("[AuditX] ParserWorkspace loading thread:", threadId);
+    console.log("[AuditX] ParserWorkspace mounting for thread:", threadId);
     let cancelled = false;
-    void supabase
-      .from("chat_messages")
-      .select("ai_message_id, role, parts")
-      .eq("thread_id", threadId)
-      .order("position")
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error("[AuditX] Failed to load chat history:", error.message, error);
-        } else {
-          console.log("[AuditX] Chat history loaded:", data?.length ?? 0, "messages");
+    
+    // Add timeout to prevent indefinite loading
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        console.error("[AuditX] Chat history load timeout after 10 seconds");
+        setLoadError("Loading workspace timed out. Please refresh the page.");
+      }
+    }, 10000);
+
+    // First verify the thread exists
+    supabase
+      .from("chat_threads")
+      .select("id")
+      .eq("id", threadId)
+      .maybeSingle()
+      .then(({ data: thread, error: threadError }) => {
+        if (cancelled) {
+          clearTimeout(timeoutId);
+          return;
         }
-        setInitial(
-          (data ?? []).map((row) => ({
-            id: row.ai_message_id,
-            role: row.role,
-            parts: row.parts,
-          })) as UIMessage[],
-        );
+        
+        if (threadError) {
+          clearTimeout(timeoutId);
+          console.error("[AuditX] Failed to verify thread:", threadError.message, threadError);
+          setLoadError(`Thread verification failed: ${threadError.message}`);
+          return;
+        }
+        
+        if (!thread) {
+          clearTimeout(timeoutId);
+          console.error("[AuditX] Thread not found:", threadId);
+          setLoadError("This workspace does not exist. It may have been deleted.");
+          return;
+        }
+        
+        console.log("[AuditX] Thread verified, loading messages...");
+        
+        // Thread exists, load messages
+        void supabase
+          .from("chat_messages")
+          .select("ai_message_id, role, parts")
+          .eq("thread_id", threadId)
+          .order("position")
+          .then(({ data, error }) => {
+            clearTimeout(timeoutId);
+            if (cancelled) return;
+            if (error) {
+              console.error("[AuditX] Failed to load chat history:", error.message, error);
+              setLoadError(`Failed to load messages: ${error.message}`);
+            } else {
+              console.log("[AuditX] Chat history loaded:", data?.length ?? 0, "messages");
+            }
+            setInitial(
+              (data ?? []).map((row) => ({
+                id: row.ai_message_id,
+                role: row.role,
+                parts: row.parts,
+              })) as UIMessage[],
+            );
+          });
       });
+      
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
       console.log("[AuditX] ParserWorkspace cleanup for thread:", threadId);
     };
   }, [threadId]);
@@ -65,6 +109,24 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
       }),
     [session?.access_token],
   );
+
+  if (loadError) {
+    return (
+      <div className="flex h-[70vh] flex-col items-center justify-center gap-4 text-center">
+        <p className="text-sm" style={{ color: "var(--ink-2)" }}>
+          {loadError}
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-full px-4 py-2 text-xs font-semibold text-white"
+          style={{ background: "var(--color-accent)" }}
+        >
+          Refresh page
+        </button>
+      </div>
+    );
+  }
 
   if (!initial) {
     return (
