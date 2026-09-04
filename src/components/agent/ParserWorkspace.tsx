@@ -16,6 +16,7 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
+import { withTimeout } from "@/lib/utils";
 
 const SUGGESTIONS = [
   "Reconcile my last 10 trades and flag anything odd",
