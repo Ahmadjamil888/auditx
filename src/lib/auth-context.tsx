@@ -138,9 +138,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       console.log("[AuditX] Profile state set successfully");
     } catch (cause) {
-      console.error("[AuditX] Could not load profile:", cause);
+      console.error("[AuditX][Auth] ERROR loading user data", { userId: u.id, cause });
     }
   }, []);
+
+  // Single controlled lifecycle: never overlap, never reload the same user,
+  // always release the loading flag.
+  const ensureUserData = useCallback(
+    async (u: User, force = false) => {
+      if (loadingUserId.current === u.id) return;
+      if (!force && loadedUserId.current === u.id) {
+        setLoading(false);
+        return;
+      }
+      loadingUserId.current = u.id;
+      setLoading(true);
+      try {
+        await loadProfile(u);
+        loadedUserId.current = u.id;
+      } finally {
+        loadingUserId.current = null;
+        setLoading(false);
+        console.log("[AuditX][Auth] Auth initialization complete", { userId: u.id });
+      }
+    },
+    [loadProfile],
+  );
+
 
   async function provision(u: User) {
     console.log("[AuditX] Starting provisioning for user:", u.id);
