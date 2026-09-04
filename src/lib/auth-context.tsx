@@ -45,6 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<OrgProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const provisioning = useRef(false);
+  // Guards against duplicate/overlapping loads from getSession + INITIAL_SESSION + SIGNED_IN.
+  const loadingUserId = useRef<string | null>(null);
+  const loadedUserId = useRef<string | null>(null);
+
 
   const loadProfile = useCallback(async (u: User) => {
     try {
