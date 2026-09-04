@@ -45,6 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<OrgProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const provisioning = useRef(false);
+  // Guards against duplicate/overlapping loads from getSession + INITIAL_SESSION + SIGNED_IN.
+  const loadingUserId = useRef<string | null>(null);
+  const loadedUserId = useRef<string | null>(null);
+
 
   const loadProfile = useCallback(async (u: User) => {
     try {
@@ -134,9 +138,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       console.log("[AuditX] Profile state set successfully");
     } catch (cause) {
-      console.error("[AuditX] Could not load profile:", cause);
+      console.error("[AuditX][Auth] ERROR loading user data", { userId: u.id, cause });
     }
   }, []);
+
+  // Single controlled lifecycle: never overlap, never reload the same user,
+  // always release the loading flag.
+  const ensureUserData = useCallback(
+    async (u: User, force = false) => {
+      if (loadingUserId.current === u.id) return;
+      if (!force && loadedUserId.current === u.id) {
+        setLoading(false);
+        return;
+      }
+      loadingUserId.current = u.id;
+      setLoading(true);
+      try {
+        await loadProfile(u);
+        loadedUserId.current = u.id;
+      } finally {
+        loadingUserId.current = null;
+        setLoading(false);
+        console.log("[AuditX][Auth] Auth initialization complete", { userId: u.id });
+      }
+    },
+    [loadProfile],
+  );
+
 
   async function provision(u: User) {
     console.log("[AuditX] Starting provisioning for user:", u.id);
@@ -195,48 +223,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
-    if (data.user) await loadProfile(data.user);
-  }, [loadProfile]);
+    if (data.user) await ensureUserData(data.user, true);
+  }, [ensureUserData]);
 
   useEffect(() => {
-    console.log("[AuditX] AuthContext useEffect - getting initial session");
-    supabase.auth.getSession().then(({ data }) => {
-      const s = data.session;
-      console.log("[AuditX] Initial session result:", s ? "found" : "not found");
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        console.log("[AuditX] User found in session, loading profile...");
-        loadProfile(s.user).finally(() => {
-          console.log("[AuditX] Profile loading completed, setting loading=false");
-          setLoading(false);
-        });
-      } else {
-        console.log("[AuditX] No user in session, setting loading=false");
+    let mounted = true;
+    console.log("[AuditX][Auth] Initializing session");
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        const s = data.session;
+        console.log("[AuditX][Auth]", s ? "Session found" : "No session");
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (s?.user) return ensureUserData(s.user);
         setLoading(false);
-      }
-    });
+        return undefined;
+      })
+      .catch((cause: unknown) => {
+        console.error("[AuditX][Auth] ERROR initializing session", { cause });
+        if (mounted) setLoading(false);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, s) => {
-      console.log("[AuditX] Auth state change:", event, "session:", !!s);
+      if (!mounted) return;
+      console.log("[AuditX][Auth] state change", event, !!s);
       setSession(s);
       setUser(s?.user ?? null);
+
       if (event === "SIGNED_OUT") {
-        console.log("[AuditX] User signed out, clearing profile");
+        loadedUserId.current = null;
         setProfile(null);
+        setLoading(false);
         return;
       }
-      if (s?.user) {
-        console.log("[AuditX] Auth state change with user, loading profile...");
-        void loadProfile(s.user);
-      }
+      // INITIAL_SESSION / SIGNED_IN / TOKEN_REFRESHED for an already-loaded
+      // user must not re-run the expensive profile load.
+      if (s?.user) void ensureUserData(s.user);
     });
 
     return () => {
-      console.log("[AuditX] AuthContext cleanup");
+      mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [loadProfile]);
+  }, [ensureUserData]);
+
 
   async function handleSignOut() {
     await supabase.auth.signOut();
