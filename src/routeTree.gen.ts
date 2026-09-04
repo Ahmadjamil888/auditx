@@ -32,6 +32,7 @@ import { Route as AppReconciliationRouteImport } from './routes/app.reconciliati
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppTaxRouteImport } from './routes/app.tax'
+import { Route as AppParserIndexRouteImport } from './routes/app.parser.index'
 import { Route as AppParserThreadIdRouteImport } from './routes/app.parser.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -149,6 +150,11 @@ const AppTaxRoute = AppTaxRouteImport.update({
   path: '/tax',
   getParentRoute: () => AppRoute,
 } as any)
+const AppParserIndexRoute = AppParserIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppParserRoute,
+} as any)
 const AppParserThreadIdRoute = AppParserThreadIdRouteImport.update({
   id: '/$threadId',
   path: '/$threadId',
@@ -180,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
+  '/app/parser/': typeof AppParserIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -200,12 +207,12 @@ export interface FileRoutesByTo {
   '/app/billing': typeof AppBillingRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
-  '/app/parser': typeof AppParserRouteWithChildren
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
+  '/app/parser': typeof AppParserIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -233,6 +240,7 @@ export interface FileRoutesById {
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
+  '/app/parser/': typeof AppParserIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -261,6 +269,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/tax'
     | '/app/parser/$threadId'
+    | '/app/parser/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -281,12 +290,12 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/ledger'
     | '/app/overview'
-    | '/app/parser'
     | '/app/reconciliation'
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
     | '/app/parser/$threadId'
+    | '/app/parser'
   id:
     | '__root__'
     | '/'
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/tax'
     | '/app/parser/$threadId'
+    | '/app/parser/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -494,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTaxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/parser/': {
+      id: '/app/parser/'
+      path: '/'
+      fullPath: '/app/parser/'
+      preLoaderRoute: typeof AppParserIndexRouteImport
+      parentRoute: typeof AppParserRoute
+    }
     '/app/parser/$threadId': {
       id: '/app/parser/$threadId'
       path: '/$threadId'
@@ -506,10 +523,12 @@ declare module '@tanstack/react-router' {
 
 interface AppParserRouteChildren {
   AppParserThreadIdRoute: typeof AppParserThreadIdRoute
+  AppParserIndexRoute: typeof AppParserIndexRoute
 }
 
 const AppParserRouteChildren: AppParserRouteChildren = {
   AppParserThreadIdRoute: AppParserThreadIdRoute,
+  AppParserIndexRoute: AppParserIndexRoute,
 }
 
 const AppParserRouteWithChildren = AppParserRoute._addFileChildren(
