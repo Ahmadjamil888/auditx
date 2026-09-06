@@ -8,6 +8,9 @@ import { Message, MessageContent, MessageResponse } from "@/components/ai-elemen
 import {
   PromptInput,
   PromptInputActionAddAttachments,
+  PromptInputActionMenu,
+  PromptInputActionMenuContent,
+  PromptInputActionMenuTrigger,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
@@ -341,7 +344,12 @@ function Chat({
             />
             <PromptInputFooter>
               <PromptInputTools>
-                <PromptInputActionAddAttachments label="Attach broker document" />
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger tooltip="Attach files" />
+                  <PromptInputActionMenuContent>
+                    <PromptInputActionAddAttachments label="Attach broker document" />
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
               </PromptInputTools>
               <PromptInputSubmit status={status} onStop={stop} />
             </PromptInputFooter>
