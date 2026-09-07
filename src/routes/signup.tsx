@@ -40,7 +40,7 @@ function SignUp() {
   // As soon as session is confirmed, go straight to dashboard
   useEffect(() => {
     if (!loading && session) {
-      nav({ to: "/app/overview", replace: true });
+      nav({ to: "/app/parser", replace: true });
     }
   }, [session, loading, nav]);
 

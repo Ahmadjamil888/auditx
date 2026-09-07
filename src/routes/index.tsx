@@ -177,7 +177,7 @@ const faqs = [
 function Home() {
   const { session, loading } = useAuth();
   // While auth state is resolving, default to the unauthenticated CTA
-  const ctaTo = (!loading && session) ? "/app/overview" : "/signup";
+  const ctaTo = (!loading && session) ? "/app/parser" : "/signup";
 
   return (
     <div style={{ fontFamily: "var(--font-body)", color: "var(--color-text)" }}>

@@ -40,7 +40,7 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Btn onClick={() => nav({ to: isLoggedIn ? "/app/overview" : "/signup" })}>
+          <Btn onClick={() => nav({ to: isLoggedIn ? "/app/parser" : "/signup" })}>
             {isLoggedIn ? "Dashboard" : "Start Free Audit"}
           </Btn>
           {!isLoggedIn && (
@@ -112,7 +112,7 @@ export function Navbar() {
               <div className="mt-auto flex flex-col gap-2">
                 <Btn
                   className="w-full"
-                  onClick={() => { setOpen(false); nav({ to: isLoggedIn ? "/app/overview" : "/signup" }); }}
+                  onClick={() => { setOpen(false); nav({ to: isLoggedIn ? "/app/parser" : "/signup" }); }}
                 >
                   {isLoggedIn ? "Dashboard" : "Start Free Audit"}
                 </Btn>

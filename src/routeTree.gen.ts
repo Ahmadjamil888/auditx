@@ -22,6 +22,7 @@ import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentRouteImport } from './routes/app.agent'
 import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
@@ -99,6 +100,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppAgentRoute = AppAgentRouteImport.update({
   id: '/agent',
@@ -185,13 +191,13 @@ export interface FileRoutesByFullPath {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+  '/app/': typeof AppIndexRoute
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser/': typeof AppParserIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/app': typeof AppRouteWithChildren
   '/contact': typeof ContactRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
@@ -211,6 +217,7 @@ export interface FileRoutesByTo {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+  '/app': typeof AppIndexRoute
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser': typeof AppParserIndexRoute
 }
@@ -239,6 +246,7 @@ export interface FileRoutesById {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+  '/app/': typeof AppIndexRoute
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser/': typeof AppParserIndexRoute
 }
@@ -268,13 +276,13 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+    | '/app/'
     | '/app/parser/$threadId'
     | '/app/parser/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
-    | '/app'
     | '/contact'
     | '/forgot-password'
     | '/help'
@@ -294,6 +302,7 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+    | '/app'
     | '/app/parser/$threadId'
     | '/app/parser'
   id:
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+    | '/app/'
     | '/app/parser/$threadId'
     | '/app/parser/'
   fileRoutesById: FileRoutesById
@@ -434,6 +444,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/agent': {
       id: '/app/agent'
       path: '/agent'
@@ -546,6 +563,7 @@ interface AppRouteChildren {
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTaxRoute: typeof AppTaxRoute
+  AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -559,6 +577,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTaxRoute: AppTaxRoute,
+  AppIndexRoute: AppIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
