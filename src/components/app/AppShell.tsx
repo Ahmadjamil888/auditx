@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { Logo } from "@/components/brand/Logo";
+import { Logo, LogoMark } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
 
 const primaryItem = { label: "Ask AuditX", icon: Sparkles, to: "/app/parser" } as const;
@@ -122,10 +122,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {collapsed ? (
               <span
-                className="flex size-9 items-center justify-center rounded-xl text-sm font-semibold text-white"
+                className="flex size-9 items-center justify-center rounded-xl"
                 style={{ background: "var(--color-accent)" }}
               >
-                AX
+                <LogoMark size={22} fill="#fff" />
               </span>
             ) : (
               <>
