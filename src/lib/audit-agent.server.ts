@@ -47,8 +47,8 @@ export function createOpenRouterProvider(apiKey: string) {
     baseURL: OPENROUTER_BASE,
     headers: {
       "Authorization":  `Bearer ${apiKey}`,
-      "HTTP-Referer":   "https://auditx.app",
-      "X-Title":        "AuditX — AI Financial Audit",
+      "HTTP-Referer":   "https://auditx-beta.vercel.app",
+      "X-Title":        "AuditX - AI Financial Audit",
       // Tell OpenRouter we allow fallback so it can auto-failover on errors
       "X-OpenRouter-Allow-Fallback": "1",
     },
