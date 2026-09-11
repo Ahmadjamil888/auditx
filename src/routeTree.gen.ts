@@ -211,15 +211,8 @@ export interface FileRoutesByFullPath {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+  '/app/timeline': typeof AppTimelineRoute
   '/app/': typeof AppIndexRoute
-=======
-  '/app/timeline': typeof AppTimelineRoute
->>>>>>> Stashed changes
-=======
-  '/app/timeline': typeof AppTimelineRoute
->>>>>>> Stashed changes
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser/': typeof AppParserIndexRoute
 }
@@ -247,15 +240,8 @@ export interface FileRoutesByTo {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+  '/app/timeline': typeof AppTimelineRoute
   '/app': typeof AppIndexRoute
-=======
-  '/app/timeline': typeof AppTimelineRoute
->>>>>>> Stashed changes
-=======
-  '/app/timeline': typeof AppTimelineRoute
->>>>>>> Stashed changes
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser': typeof AppParserIndexRoute
 }
@@ -286,15 +272,8 @@ export interface FileRoutesById {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+  '/app/timeline': typeof AppTimelineRoute
   '/app/': typeof AppIndexRoute
-=======
-  '/app/timeline': typeof AppTimelineRoute
->>>>>>> Stashed changes
-=======
-  '/app/timeline': typeof AppTimelineRoute
->>>>>>> Stashed changes
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser/': typeof AppParserIndexRoute
 }
@@ -326,15 +305,8 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+    | '/app/timeline'
     | '/app/'
-=======
-    | '/app/timeline'
->>>>>>> Stashed changes
-=======
-    | '/app/timeline'
->>>>>>> Stashed changes
     | '/app/parser/$threadId'
     | '/app/parser/'
   fileRoutesByTo: FileRoutesByTo
@@ -362,15 +334,8 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+    | '/app/timeline'
     | '/app'
-=======
-    | '/app/timeline'
->>>>>>> Stashed changes
-=======
-    | '/app/timeline'
->>>>>>> Stashed changes
     | '/app/parser/$threadId'
     | '/app/parser'
   id:
@@ -400,15 +365,8 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+    | '/app/timeline'
     | '/app/'
-=======
-    | '/app/timeline'
->>>>>>> Stashed changes
-=======
-    | '/app/timeline'
->>>>>>> Stashed changes
     | '/app/parser/$threadId'
     | '/app/parser/'
   fileRoutesById: FileRoutesById
@@ -664,15 +622,8 @@ interface AppRouteChildren {
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTaxRoute: typeof AppTaxRoute
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+  AppTimelineRoute: typeof AppTimelineRoute
   AppIndexRoute: typeof AppIndexRoute
-=======
-  AppTimelineRoute: typeof AppTimelineRoute
->>>>>>> Stashed changes
-=======
-  AppTimelineRoute: typeof AppTimelineRoute
->>>>>>> Stashed changes
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -688,15 +639,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTaxRoute: AppTaxRoute,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+  AppTimelineRoute: AppTimelineRoute,
   AppIndexRoute: AppIndexRoute,
-=======
-  AppTimelineRoute: AppTimelineRoute,
->>>>>>> Stashed changes
-=======
-  AppTimelineRoute: AppTimelineRoute,
->>>>>>> Stashed changes
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

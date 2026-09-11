@@ -4,6 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/lib/database.types";
 import { resolveAgentModel } from "@/lib/audit-agent.server";
+import { computeTax } from "@/lib/tax";
+import { computePortfolioSummary } from "@/lib/financial-intelligence";
+import type { Transaction } from "@/lib/demo-data";
 
 type ChatBody = { id?: unknown; messages?: unknown };
 
@@ -73,9 +76,83 @@ const SPECIALISTS = {
     "You are the Evidence & Verification Agent. For every claim supplied to you, name the specific source document, row, reference id or ledger record that supports it, and mark anything unsupported as ASSUMPTION.",
   research:
     "You are the Research Agent. Using only the context supplied (no browsing), summarise relevant market, tax-rule or broker-format knowledge, and clearly label anything that is general knowledge rather than user data.",
+  calculation:
+    "You are the Calculation Agent. Recompute every material figure from the supplied numbers using explicit arithmetic. Return labelled values, the expression used, and flag any missing inputs. Never estimate.",
   quality:
     "You are the Quality Control Agent. Independently re-check the supplied findings for arithmetic errors, contradictions, unsupported claims and missing caveats. Return PASS or REVISE with a precise list of corrections.",
 } as const;
+
+const LEDGER_TEMPLATE_COLUMNS = [
+  "ticker",
+  "action",
+  "quantity",
+  "price",
+  "fees",
+  "wht",
+  "trade_date",
+  "ref_id",
+  "broker",
+  "exchange",
+] as const;
+
+function csvEscape(value: string | number | null | undefined) {
+  const text = value == null ? "" : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function toCsv(headers: string[], rows: Array<Array<string | number | null | undefined>>) {
+  return [headers.map(csvEscape).join(","), ...rows.map((row) => row.map(csvEscape).join(","))].join("\n");
+}
+
+function asTransaction(row: {
+  id: string;
+  ticker: string;
+  action: string;
+  quantity: number;
+  price: number;
+  fees: number;
+  wht: number;
+  trade_date: string;
+  ref_id: string;
+  confidence_score: number;
+  status: string;
+  broker: string;
+  exchange: string;
+}): Transaction {
+  return {
+    id: row.id,
+    ticker: row.ticker,
+    action: row.action as Transaction["action"],
+    quantity: Number(row.quantity),
+    price: Number(row.price),
+    fees: Number(row.fees ?? 0),
+    wht: Number(row.wht ?? 0),
+    trade_date: row.trade_date,
+    ref_id: row.ref_id,
+    confidence_score: Number(row.confidence_score ?? 0),
+    status: row.status as Transaction["status"],
+    broker: row.broker,
+    exchange: row.exchange === "NSE" ? "NSE" : "PSX",
+  };
+}
+
+function missingFields(row: {
+  ticker: string;
+  action: string;
+  quantity: number;
+  price: number;
+  trade_date: string;
+  ref_id: string;
+}) {
+  const missing: string[] = [];
+  if (!row.ticker || row.ticker === "UNKNOWN") missing.push("ticker");
+  if (!["BUY", "SELL", "DIV"].includes(row.action)) missing.push("action");
+  if (!row.quantity) missing.push("quantity");
+  if (!row.price) missing.push("price");
+  if (!row.trade_date) missing.push("trade_date");
+  if (!row.ref_id) missing.push("ref_id");
+  return missing;
+}
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -135,11 +212,21 @@ export const Route = createFileRoute("/api/chat")({
         const tools = {
           plan_task: tool({
             description:
-              "Understand the objective and publish the work plan before doing anything else. Call this first on every non-trivial request.",
+              "Understand the objective and publish the work plan before doing anything else. Call this first on every non-trivial request. Also use it to surface a public progress stage.",
             inputSchema: z.object({
               objective: z.string(),
               steps: z.array(z.string()),
               agents_needed: z.array(z.string()),
+              public_stage: z
+                .enum([
+                  "Understanding your task",
+                  "Extracting financial data",
+                  "Running reconciliation",
+                  "Verifying evidence",
+                  "Checking calculations",
+                  "Preparing findings",
+                ])
+                .nullable(),
             }),
             execute: async (input) => ({ ...input, accepted: true }),
           }),
@@ -154,6 +241,7 @@ export const Route = createFileRoute("/api/chat")({
                 "compliance",
                 "evidence",
                 "research",
+                "calculation",
                 "quality",
               ]),
               objective: z.string(),
@@ -284,6 +372,197 @@ export const Route = createFileRoute("/api/chat")({
               return { id: flag_id, status: "resolved" };
             },
           }),
+          report_progress: tool({
+            description:
+              "Publish a short public progress update for the user. Call this as work moves between stages. Never include hidden reasoning.",
+            inputSchema: z.object({
+              stage: z.enum([
+                "Understanding your task",
+                "Extracting financial data",
+                "Running reconciliation",
+                "Verifying evidence",
+                "Checking calculations",
+                "Preparing findings",
+              ]),
+              detail: z.string().nullable(),
+            }),
+            execute: async (input) => input,
+          }),
+          get_unfinished_records: tool({
+            description:
+              "Read incomplete or needs-review ledger rows so they can be completed, posted, or exported. Use this whenever the user asks to update unfinished records.",
+            inputSchema: z.object({}),
+            execute: async () => {
+              const { data, error } = await supabase
+                .from("transactions")
+                .select(
+                  "id,ticker,action,quantity,price,fees,wht,trade_date,ref_id,broker,exchange,status,confidence_score",
+                )
+                .eq("org_id", thread.org_id)
+                .order("trade_date", { ascending: false })
+                .limit(200);
+              if (error) throw new Error(error.message);
+              const unfinished = (data ?? []).filter((row) => {
+                const gaps = missingFields(row);
+                return row.status === "needs_review" || row.confidence_score < 0.75 || gaps.length > 0;
+              });
+              return unfinished.map((row) => ({
+                ...row,
+                missing_fields: missingFields(row),
+                can_post: missingFields(row).length === 0,
+              }));
+            },
+          }),
+          propose_unfinished_fixes: tool({
+            description:
+              "Propose conservative completions for unfinished records using only existing ledger values. Does not write. Follow with update_transaction for each change the user should approve.",
+            inputSchema: z.object({}),
+            execute: async () => {
+              const { data, error } = await supabase
+                .from("transactions")
+                .select(
+                  "id,ticker,action,quantity,price,fees,wht,trade_date,ref_id,broker,exchange,status,confidence_score",
+                )
+                .eq("org_id", thread.org_id)
+                .limit(200);
+              if (error) throw new Error(error.message);
+              return (data ?? [])
+                .filter((row) => row.status === "needs_review" || missingFields(row).length > 0)
+                .map((row) => {
+                  const missing = missingFields(row);
+                  const proposed: Record<string, unknown> = { id: row.id };
+                  if (row.fees == null) proposed["fees"] = 0;
+                  if (row.wht == null) proposed["wht"] = 0;
+                  if (!row.exchange) proposed["exchange"] = "PSX";
+                  if (missing.length === 0) proposed["status"] = "posted";
+                  return {
+                    id: row.id,
+                    ticker: row.ticker,
+                    missing_fields: missing,
+                    proposed_updates: proposed,
+                    assumption:
+                      missing.length === 0
+                        ? "Required fields are present; posting is a status change only."
+                        : "Required fields are still missing — do not invent values. Export a spreadsheet for the user to complete.",
+                    ready_to_post: missing.length === 0,
+                  };
+                });
+            },
+          }),
+          get_tax_computation: tool({
+            description: "Run the deterministic FIFO CGT engine on the user's real ledger. Never invent tax numbers.",
+            inputSchema: z.object({
+              jurisdiction: z.enum(["PSX", "NSE"]).nullable(),
+              tax_year: z.string().nullable(),
+            }),
+            execute: async ({ jurisdiction, tax_year }) => {
+              const { data, error } = await supabase
+                .from("transactions")
+                .select(
+                  "id,ticker,action,quantity,price,fees,wht,trade_date,ref_id,confidence_score,status,broker,exchange",
+                )
+                .eq("org_id", thread.org_id);
+              if (error) throw new Error(error.message);
+              const txs = (data ?? []).map(asTransaction);
+              const year = tax_year || String(new Date().getFullYear());
+              const market = jurisdiction ?? (txs.find((t) => t.exchange === "NSE") ? "NSE" : "PSX");
+              const tax = computeTax(txs, { jurisdiction: market, filerStatus: "Filer", taxYear: year });
+              return {
+                source: "DETERMINISTIC_FIFO",
+                jurisdiction: market,
+                taxYear: year,
+                shortTermGain: tax.shortTermGain,
+                longTermGain: tax.longTermGain,
+                estimatedTaxDue: tax.estimatedTaxDue,
+                dividendWHT: tax.dividendWHT,
+                lots: tax.lots.slice(0, 40),
+              };
+            },
+          }),
+          get_portfolio_analysis: tool({
+            description: "Compute a deterministic portfolio summary from the ledger (cost-basis proxy, not live prices).",
+            inputSchema: z.object({ jurisdiction: z.enum(["PSX", "NSE"]).nullable() }),
+            execute: async ({ jurisdiction }) => {
+              const { data, error } = await supabase
+                .from("transactions")
+                .select(
+                  "id,ticker,action,quantity,price,fees,wht,trade_date,ref_id,confidence_score,status,broker,exchange",
+                )
+                .eq("org_id", thread.org_id);
+              if (error) throw new Error(error.message);
+              const txs = (data ?? []).map(asTransaction);
+              const market = jurisdiction ?? (txs.find((t) => t.exchange === "NSE") ? "NSE" : "PSX");
+              return computePortfolioSummary(txs, market, String(new Date().getFullYear()));
+            },
+          }),
+          prepare_spreadsheet: tool({
+            description:
+              "Build a downloadable CSV. Use kind=unfinished for rows that still need work, kind=ledger for the full book, kind=template for a blank sheet to add new records, or kind=custom with explicit rows.",
+            inputSchema: z.object({
+              kind: z.enum(["unfinished", "ledger", "template", "custom"]),
+              filename: z.string().nullable(),
+              headers: z.array(z.string()).nullable(),
+              rows: z.array(z.array(z.string())).nullable(),
+            }),
+            execute: async ({ kind, filename, headers, rows }) => {
+              const stamp = new Date().toISOString().slice(0, 10);
+              if (kind === "template") {
+                const cols = headers?.length ? headers : [...LEDGER_TEMPLATE_COLUMNS];
+                return {
+                  filename: filename || `auditx-new-records-${stamp}.csv`,
+                  csv: toCsv(cols, [cols.map(() => "")]),
+                  kind,
+                  note: "Blank template for new transactions. Required columns: ticker, action, quantity, price, trade_date.",
+                };
+              }
+              if (kind === "custom") {
+                const cols = headers?.length ? headers : [...LEDGER_TEMPLATE_COLUMNS];
+                return {
+                  filename: filename || `auditx-export-${stamp}.csv`,
+                  csv: toCsv(cols, rows ?? []),
+                  kind,
+                };
+              }
+              const { data, error } = await supabase
+                .from("transactions")
+                .select(
+                  "id,ticker,action,quantity,price,fees,wht,trade_date,ref_id,broker,exchange,status,confidence_score",
+                )
+                .eq("org_id", thread.org_id)
+                .order("trade_date", { ascending: false });
+              if (error) throw new Error(error.message);
+              const selected =
+                kind === "unfinished"
+                  ? (data ?? []).filter(
+                      (row) => row.status === "needs_review" || missingFields(row).length > 0 || row.confidence_score < 0.75,
+                    )
+                  : (data ?? []);
+              const cols = [...LEDGER_TEMPLATE_COLUMNS, "status", "confidence_score", "id"];
+              const csvRows = selected.map((row) => [
+                row.ticker,
+                row.action,
+                row.quantity,
+                row.price,
+                row.fees,
+                row.wht,
+                row.trade_date,
+                row.ref_id,
+                row.broker,
+                row.exchange,
+                row.status,
+                row.confidence_score,
+                row.id,
+              ]);
+              return {
+                filename:
+                  filename ||
+                  (kind === "unfinished" ? `auditx-unfinished-${stamp}.csv` : `auditx-ledger-${stamp}.csv`),
+                csv: toCsv(cols, csvRows),
+                kind,
+                row_count: csvRows.length,
+              };
+            },
+          }),
         };
 
         const uiMessages = body.messages as UIMessage[];
@@ -295,18 +574,48 @@ export const Route = createFileRoute("/api/chat")({
           model,
           system: `You are AuditX, the Supervisor Orchestrator of an autonomous financial audit team serving PSX and NSE traders.
 
-How you work:
-1. Read the whole conversation, the user's uploaded documents, and their real ledger before deciding anything. Follow-ups build on earlier turns — never ask the user to repeat context you already have.
-2. Call plan_task first for any non-trivial objective, naming the specialists you will use.
-3. Delegate only the sub-tasks that are actually needed, via delegate_agent: extraction (documents), analysis (performance), reconciliation (matching), compliance (anomalies and risk), evidence (tracing findings to sources), research (background), quality (final validation).
-4. Give each specialist all data it needs inside `context`; specialists are stateless.
-5. Use `calculate` for every material number. Use get_transactions / get_ledger_summary / get_open_flags for real data — never guess ledger contents.
-6. If specialists disagree or a result looks uncertain, delegate again for verification before answering.
-7. Before the final answer, run a quality delegation on your findings when the task involved numbers, reconciliation or compliance.
+━━ HOW YOU WORK ━━
+1. Read the full conversation, all uploaded documents, the real ledger, and unfinished records before making any decision. Follow-ups build on earlier turns — never ask the user to repeat information you already have.
+2. For any non-trivial task, call plan_task first (with objective, steps, agents_needed, public_stage), then call report_progress as your work moves between stages.
+   Public stages (use exactly these strings): "Understanding your task" | "Extracting financial data" | "Running reconciliation" | "Verifying evidence" | "Checking calculations" | "Preparing findings"
+3. Delegate sub-tasks via delegate_agent only when genuinely needed:
+   - extraction   → read documents, broker slips, invoices, spreadsheets
+   - analysis     → portfolio performance, holdings, cost basis, cash flows
+   - reconciliation → match transaction sets, compute deltas, list mismatches
+   - compliance   → detect anomalies, duplicates, fee surcharges, WHT mismatches, policy risks
+   - evidence     → trace every finding to a specific source row, document or reference
+   - research     → relevant market, tax-rule or broker-format background (from supplied context only)
+   - calculation  → recompute every material figure from explicit arithmetic; never estimate
+   - quality      → re-check findings for errors, contradictions, unsupported claims before answering
+4. Pass every piece of data a specialist needs inside its context field — specialists are stateless.
+5. Use calculate for ALL material numbers (fees, tax, gains, deltas). Never compute mentally.
+6. Use get_transactions / get_ledger_summary / get_open_flags / get_unfinished_records / get_tax_computation / get_portfolio_analysis for real data. Never guess ledger contents.
 
-Writes: insert, update, delete and flag actions require explicit user approval. Propose them; never claim success until the tool result confirms it.
+━━ UNFINISHED RECORDS WORKFLOW ━━
+When the user asks to update/fix/complete unfinished records:
+1. Call get_unfinished_records → present a clear summary table of what is incomplete.
+2. Call propose_unfinished_fixes → identify which rows can be posted (all required fields present) vs. which still have missing data.
+3. For ready rows: request update_transaction approval for each one.
+4. For rows with missing required fields: do NOT invent ticker, quantity, price or date. Tell the user exactly which fields are missing and offer to export them.
+5. After completing the update flow, call prepare_spreadsheet(kind="template") to give the user a blank template for new records, and prepare_spreadsheet(kind="unfinished") for any remaining incomplete rows.
 
-Final answer format (skip sections that do not apply):
+━━ SPREADSHEET WORKFLOW ━━
+When the user asks for a spreadsheet/CSV:
+- kind="unfinished" → export rows still needing work
+- kind="ledger"     → export full ledger
+- kind="template"   → blank template for new entries
+- kind="custom"     → custom headers + rows you supply
+Always tell the user the file will download automatically.
+
+━━ WRITES REQUIRE APPROVAL ━━
+insert_transaction, update_transaction, delete_transaction, flag_anomaly, resolve_flag all require explicit user approval. Propose clearly; never claim success until the tool result confirms it.
+
+━━ QUALITY GATE ━━
+Before the final answer on any task involving numbers, reconciliation or compliance, run a quality delegation to catch arithmetic errors, contradictions or unsupported claims. If quality returns REVISE, fix the issues before replying.
+
+━━ FINAL ANSWER FORMAT ━━
+Use only the sections that apply (skip empty ones):
+
 ## Summary
 ## Key Findings
 ## Evidence
@@ -315,7 +624,11 @@ Final answer format (skip sections that do not apply):
 ## Recommended Actions
 ## Confidence Level
 
-Mark every figure as verified (with its source) or as an assumption. Use markdown tables for figures. Keep progress narration short and public — never reveal hidden chain-of-thought.`,
+Rules for the final answer:
+- Mark every figure as verified (source: field name, reference ID, or document) or clearly labelled as an assumption.
+- Use markdown tables for financial figures.
+- Never reveal hidden chain-of-thought or internal agent communications.
+- Close with a one-line disclaimer that results are indicative and should be verified before filing.`,
           messages: await convertToModelMessages(uiMessages),
           tools,
           toolApproval: {

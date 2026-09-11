@@ -11,33 +11,12 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
   PanelLeft,
-  SearchIcon,
   Settings,
   Shield,
   Sparkles,
   Upload,
-=======
-  Plus,
-  Search,
-  Settings,
-  Shield,
-  Sparkles,
->>>>>>> Stashed changes
-=======
-  Plus,
-  Search,
-  Settings,
-  Shield,
-  Sparkles,
->>>>>>> Stashed changes
   User,
-  X,
-  Zap,
-  Clock,
-  Lightbulb,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Logo, LogoMark } from "@/components/brand/Logo";
@@ -45,8 +24,6 @@ import { useAuth } from "@/lib/auth-context";
 import { CommandBarProvider, useCommandBar } from "@/components/intelligence/AuditXCommandBar";
 import { useNotifications } from "@/lib/data-hooks";
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 const primaryItem = { label: "Ask AuditX", icon: Sparkles, to: "/app/parser" } as const;
 
 const navGroups = [
@@ -69,52 +46,6 @@ const navGroups = [
     ],
   },
 ] as const;
-
-const allItems = [primaryItem, ...navGroups.flatMap((g) => g.items)];
-=======
-const navItems = [
-  { label: "Mission Control", icon: LayoutDashboard, to: "/app/overview",      group: "INTELLIGENCE" },
-  { label: "Insights",        icon: Lightbulb,       to: "/app/insights",       group: "INTELLIGENCE" },
-  { label: "Investigations",  icon: Search,          to: "/app/investigations",  group: "INTELLIGENCE" },
-  { label: "Timeline",        icon: Clock,           to: "/app/timeline",        group: "INTELLIGENCE" },
-  { label: "Ledger",          icon: BookOpen,        to: "/app/ledger",          group: "DATA" },
-  { label: "Documents",       icon: FileSearch,      to: "/app/parser",          group: "DATA" },
-  { label: "Reconciliation",  icon: GitFork,         to: "/app/reconciliation",  group: "DATA" },
-  { label: "Tax Center",      icon: BarChart3,       to: "/app/tax",             group: "DATA" },
-  { label: "Audit Trail",     icon: Shield,          to: "/app/audit-trail",     group: "AUDIT" },
-  { label: "Reports",         icon: FileText,        to: "/app/reports",         group: "AUDIT" },
-  { label: "Settings",        icon: Settings,        to: "/app/settings",        group: "SYSTEM" },
-  { label: "Billing",         icon: CreditCard,      to: "/app/billing",         group: "SYSTEM" },
-] as const;
-
-=======
-const navItems = [
-  { label: "Mission Control", icon: LayoutDashboard, to: "/app/overview",      group: "INTELLIGENCE" },
-  { label: "Insights",        icon: Lightbulb,       to: "/app/insights",       group: "INTELLIGENCE" },
-  { label: "Investigations",  icon: Search,          to: "/app/investigations",  group: "INTELLIGENCE" },
-  { label: "Timeline",        icon: Clock,           to: "/app/timeline",        group: "INTELLIGENCE" },
-  { label: "Ledger",          icon: BookOpen,        to: "/app/ledger",          group: "DATA" },
-  { label: "Documents",       icon: FileSearch,      to: "/app/parser",          group: "DATA" },
-  { label: "Reconciliation",  icon: GitFork,         to: "/app/reconciliation",  group: "DATA" },
-  { label: "Tax Center",      icon: BarChart3,       to: "/app/tax",             group: "DATA" },
-  { label: "Audit Trail",     icon: Shield,          to: "/app/audit-trail",     group: "AUDIT" },
-  { label: "Reports",         icon: FileText,        to: "/app/reports",         group: "AUDIT" },
-  { label: "Settings",        icon: Settings,        to: "/app/settings",        group: "SYSTEM" },
-  { label: "Billing",         icon: CreditCard,      to: "/app/billing",         group: "SYSTEM" },
-] as const;
-
->>>>>>> Stashed changes
-const navGroups = ["INTELLIGENCE", "DATA", "AUDIT", "SYSTEM"] as const;
-const groupLabels: Record<string, string> = {
-  INTELLIGENCE: "Intelligence",
-  DATA: "Financial Data",
-  AUDIT: "Audit",
-  SYSTEM: "System",
-};
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
 function NavItem({
   label,
@@ -146,16 +77,8 @@ function NavItem({
         color: active || accent ? "var(--color-accent)" : "var(--ink-2)",
       }}
     >
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
       <Icon size={18} strokeWidth={1.75} />
       {!collapsed && <span className="truncate">{label}</span>}
-=======
-=======
->>>>>>> Stashed changes
-      <Icon size={17} strokeWidth={1.75} style={{ color: active ? "var(--color-accent)" : "var(--ink-2)" }} />
-      {label}
->>>>>>> Stashed changes
     </Link>
   );
 }
@@ -179,21 +102,9 @@ function InnerShell({ children }: { children: ReactNode }) {
   const currentPath = routerState.location.pathname;
   const { setOpen: setCommandBarOpen } = useCommandBar();
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-=======
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
->>>>>>> Stashed changes
-=======
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
->>>>>>> Stashed changes
 
   async function handleSignOut() {
     await signOut();
@@ -201,20 +112,10 @@ function InnerShell({ children }: { children: ReactNode }) {
   }
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
-<<<<<<< Updated upstream
   const orgName = profile?.org_name || "My Organisation";
   const plan = profile?.plan || "free";
   const initials = displayName.charAt(0).toUpperCase();
   const avatarUrl = (profile?.avatar_url || user?.user_metadata?.["avatar_url"]) as string | undefined;
-=======
-  const orgName     = profile?.org_name || "My Organisation";
-  const plan        = profile?.plan || "free";
-  const initials    = displayName.charAt(0).toUpperCase();
-  const avatarUrl   = profile?.avatar_url || (user?.user_metadata?.["avatar_url"] as string | undefined);
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
   const isActive = (to: string) => currentPath === to || currentPath.startsWith(to + "/");
 
@@ -228,7 +129,6 @@ function InnerShell({ children }: { children: ReactNode }) {
             onClick={() => (onClose ? onClose() : setExpanded((v) => !v))}
             className="flex w-full items-center justify-between rounded-xl px-1 py-1 transition-colors hover:bg-black/5"
           >
-<<<<<<< Updated upstream
             {collapsed ? (
               <span
                 className="flex size-9 items-center justify-center rounded-xl"
@@ -254,19 +154,10 @@ function InnerShell({ children }: { children: ReactNode }) {
                 <p style={{ color: "var(--ink-3)" }}>{plan.toUpperCase()} plan</p>
               </div>
               <ChevronDown size={14} strokeWidth={1.75} style={{ color: "var(--ink-3)" }} />
-=======
-            <div>
-              <p className="font-semibold">{orgName}</p>
-              <p style={{ color: "var(--ink-3)" }}>{plan.toUpperCase()}</p>
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
             </div>
           )}
         </div>
 
-<<<<<<< Updated upstream
         <nav
           className={`flex-1 overflow-y-auto ${collapsed ? "flex flex-col items-center gap-1 px-3" : "space-y-4 px-4"}`}
         >
@@ -300,76 +191,6 @@ function InnerShell({ children }: { children: ReactNode }) {
               ))}
             </div>
           ))}
-=======
-        {/* ⌘K command bar trigger */}
-        <div className="mx-4 mb-3">
-          <button
-            type="button"
-            onClick={() => { setCommandBarOpen(true); onClose?.(); }}
-            className="flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs transition-all hover:bg-black/4"
-            style={{ borderColor: "var(--hairline)", color: "var(--ink-3)", background: "rgba(25,40,55,0.02)" }}
-          >
-            <Sparkles size={13} style={{ color: "var(--color-accent)" }} />
-            <span className="flex-1 text-left">Ask AuditX…</span>
-            <kbd
-              className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-              style={{ background: "rgba(25,40,55,0.06)", color: "var(--ink-3)" }}
-            >
-              ⌘K
-            </kbd>
-          </button>
-        </div>
-
-        {/* ⌘K command bar trigger */}
-        <div className="mx-4 mb-3">
-          <button
-            type="button"
-            onClick={() => { setCommandBarOpen(true); onClose?.(); }}
-            className="flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs transition-all hover:bg-black/4"
-            style={{ borderColor: "var(--hairline)", color: "var(--ink-3)", background: "rgba(25,40,55,0.02)" }}
-          >
-            <Sparkles size={13} style={{ color: "var(--color-accent)" }} />
-            <span className="flex-1 text-left">Ask AuditX…</span>
-            <kbd
-              className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-              style={{ background: "rgba(25,40,55,0.06)", color: "var(--ink-3)" }}
-            >
-              ⌘K
-            </kbd>
-          </button>
-        </div>
-
-        <div className="mx-4 h-px" style={{ background: "var(--hairline)" }} />
-
-        {/* Nav links grouped */}
-        <nav className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-          {navGroups.map((group) => {
-            const items = navItems.filter((i) => i.group === group);
-            return (
-              <div key={group}>
-                <p
-                  className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: "var(--ink-3)" }}
-                >
-                  {groupLabels[group]}
-                </p>
-                <div className="space-y-0.5">
-                  {items.map((item) => (
-                    <NavItem
-                      key={item.label}
-                      {...item}
-                      active={currentPath === item.to || currentPath.startsWith(item.to + "/")}
-                      onClick={onClose}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         </nav>
 
         <div className="relative p-3">
@@ -385,27 +206,7 @@ function InnerShell({ children }: { children: ReactNode }) {
               className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold"
               style={{ background: avatarUrl ? "transparent" : "var(--color-accent)", color: "#fff" }}
             >
-<<<<<<< Updated upstream
               {avatarUrl ? <img src={avatarUrl} alt={displayName} className="size-full object-cover" /> : initials}
-=======
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={displayName}
-                  className="size-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                    const parent = e.currentTarget.parentElement;
-                    if (parent) {
-                      parent.style.background = "var(--color-accent)";
-                      parent.textContent = initials;
-                    }
-                  }}
-                />
-              ) : (
-                initials
-              )}
->>>>>>> Stashed changes
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1 text-left">
@@ -461,7 +262,6 @@ function InnerShell({ children }: { children: ReactNode }) {
         color: "var(--color-text)",
       }}
     >
-      {/* Desktop rail — collapsed by default, expands on click */}
       <motion.aside
         animate={{ width: expanded ? 248 : 64 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -471,7 +271,6 @@ function InnerShell({ children }: { children: ReactNode }) {
         <SidebarContent collapsed={!expanded} />
       </motion.aside>
 
-      {/* Mobile sidebar overlay */}
       <AnimatePresence>
         {mobileOpen && (
           <>
@@ -488,25 +287,14 @@ function InnerShell({ children }: { children: ReactNode }) {
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
-<<<<<<< Updated upstream
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
-<<<<<<< Updated upstream
               <SidebarContent collapsed={false} onClose={() => setMobileOpen(false)} />
-=======
-              <SidebarContent onClose={() => setMobileOpen(false)} />
->>>>>>> Stashed changes
-=======
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <SidebarContent onClose={() => setMobileOpen(false)} />
->>>>>>> Stashed changes
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <header
           className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6"
@@ -516,29 +304,11 @@ function InnerShell({ children }: { children: ReactNode }) {
             <Menu size={22} strokeWidth={1.75} />
           </button>
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
           <button
             type="button"
             className="hidden flex-1 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm sm:flex"
             style={{ borderColor: "var(--hairline)", maxWidth: 380 }}
-            onClick={() => setSearchOpen(true)}
-=======
-          {/* Command bar trigger */}
-          <button
-            type="button"
-            className="hidden sm:flex flex-1 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm transition-all hover:border-purple-200 hover:bg-purple-50/30"
-            style={{ borderColor: "var(--hairline)", maxWidth: 420 }}
             onClick={() => setCommandBarOpen(true)}
->>>>>>> Stashed changes
-=======
-          {/* Command bar trigger */}
-          <button
-            type="button"
-            className="hidden sm:flex flex-1 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm transition-all hover:border-purple-200 hover:bg-purple-50/30"
-            style={{ borderColor: "var(--hairline)", maxWidth: 420 }}
-            onClick={() => setCommandBarOpen(true)}
->>>>>>> Stashed changes
           >
             <Sparkles size={15} strokeWidth={1.75} style={{ color: "var(--color-accent)" }} />
             <span style={{ color: "var(--ink-3)" }}>Ask AuditX anything about your finances…</span>
@@ -574,72 +344,6 @@ function InnerShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        <AnimatePresence>
-          {searchOpen && (
-            <>
-              <motion.div
-                className="fixed inset-0 z-50"
-                style={{ background: "rgba(25,40,55,0.4)", backdropFilter: "blur(4px)" }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setSearchOpen(false)}
-              />
-              <motion.div
-                className="fixed left-1/2 top-20 z-50 w-full max-w-lg -translate-x-1/2"
-                initial={{ opacity: 0, y: -16, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -16, scale: 0.97 }}
-                transition={{ duration: 0.22 }}
-              >
-                <div
-                  className="mx-4 overflow-hidden rounded-2xl bg-white shadow-2xl"
-                  style={{ border: "1px solid var(--hairline)" }}
-                >
-                  <div className="flex items-center gap-3 border-b px-4 py-3.5" style={{ borderColor: "var(--hairline)" }}>
-                    <SearchIcon size={18} strokeWidth={1.75} style={{ color: "var(--ink-3)" }} />
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Search transactions, tickers, reports…"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="flex-1 text-sm outline-none"
-                    />
-                    <button type="button" onClick={() => setSearchOpen(false)} style={{ color: "var(--ink-3)" }}>
-                      <X size={18} strokeWidth={1.75} />
-                    </button>
-                  </div>
-                  <div className="p-2">
-                    {allItems.map((item) => (
-                      <button
-                        key={item.label}
-                        type="button"
-                        onClick={() => {
-                          setSearchOpen(false);
-                          nav({ to: item.to });
-                        }}
-                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-black/5"
-                        style={{ color: "var(--ink-2)" }}
-                      >
-                        <item.icon size={15} strokeWidth={1.75} style={{ color: "var(--ink-3)" }} />
-                        Navigate to {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-=======
-=======
->>>>>>> Stashed changes
-        {/* Page content */}
->>>>>>> Stashed changes
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
