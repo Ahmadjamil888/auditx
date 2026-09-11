@@ -212,7 +212,11 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   '/app/': typeof AppIndexRoute
+=======
+  '/app/timeline': typeof AppTimelineRoute
+>>>>>>> Stashed changes
 =======
   '/app/timeline': typeof AppTimelineRoute
 >>>>>>> Stashed changes
@@ -244,7 +248,11 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   '/app': typeof AppIndexRoute
+=======
+  '/app/timeline': typeof AppTimelineRoute
+>>>>>>> Stashed changes
 =======
   '/app/timeline': typeof AppTimelineRoute
 >>>>>>> Stashed changes
@@ -279,7 +287,11 @@ export interface FileRoutesById {
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   '/app/': typeof AppIndexRoute
+=======
+  '/app/timeline': typeof AppTimelineRoute
+>>>>>>> Stashed changes
 =======
   '/app/timeline': typeof AppTimelineRoute
 >>>>>>> Stashed changes
@@ -315,7 +327,11 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/tax'
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     | '/app/'
+=======
+    | '/app/timeline'
+>>>>>>> Stashed changes
 =======
     | '/app/timeline'
 >>>>>>> Stashed changes
@@ -347,7 +363,11 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/tax'
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     | '/app'
+=======
+    | '/app/timeline'
+>>>>>>> Stashed changes
 =======
     | '/app/timeline'
 >>>>>>> Stashed changes
@@ -381,7 +401,11 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/tax'
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     | '/app/'
+=======
+    | '/app/timeline'
+>>>>>>> Stashed changes
 =======
     | '/app/timeline'
 >>>>>>> Stashed changes
@@ -641,7 +665,11 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppTaxRoute: typeof AppTaxRoute
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   AppIndexRoute: typeof AppIndexRoute
+=======
+  AppTimelineRoute: typeof AppTimelineRoute
+>>>>>>> Stashed changes
 =======
   AppTimelineRoute: typeof AppTimelineRoute
 >>>>>>> Stashed changes
@@ -661,7 +689,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppTaxRoute: AppTaxRoute,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   AppIndexRoute: AppIndexRoute,
+=======
+  AppTimelineRoute: AppTimelineRoute,
+>>>>>>> Stashed changes
 =======
   AppTimelineRoute: AppTimelineRoute,
 >>>>>>> Stashed changes
