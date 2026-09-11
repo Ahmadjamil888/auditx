@@ -1,7 +1,7 @@
 // ─── AuditX agent service ─────────────────────────────────────────────────────
 // UI-agnostic orchestration layer:
 //   ChatComposer → AgentRequest → (extraction + streaming AI) → AgentActivity / AIMessage
-// Model cascade: meta-llama/llama-3.3-70b-instruct:free → mistralai/mistral-7b-instruct:free
+// Model cascade: nvidia/nemotron-3-ultra-550b-a55b:free → inclusionai/ling-3.0-flash-fin:free → openrouter/free
 
 // @ts-nocheck
 import { parseDocument, parseTextDocument, type ExtractedField } from "@/lib/ai-service";
@@ -114,8 +114,9 @@ function getApiKey(): string {
 // ── Streaming cascade: primary → fallback ─────────────────────────────────────
 
 const STREAM_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",  // primary — free tier
-  "mistralai/mistral-7b-instruct:free",       // fallback — reliable free tier
+  "nvidia/nemotron-3-ultra-550b-a55b:free",  // primary — 1M context, top reasoning
+  "inclusionai/ling-3.0-flash-fin:free",     // fallback — finance-focused free model
+  "openrouter/free",                          // last resort — auto-selected free model
 ] as const;
 
 async function streamWithCascade(

@@ -4,16 +4,17 @@
 //
 // The env var exposed to the browser is VITE_OPENROUTER_API_KEY.
 // Free models with strong reasoning and streaming support:
-//   Primary  : google/gemini-2.5-flash:free
-//   Fallback : meta-llama/llama-3.3-70b-instruct:free
+//   Primary  : nvidia/nemotron-3-ultra-550b-a55b:free  (1M context, top free)
+//   Fallback : inclusionai/ling-3.0-flash-fin:free     (finance-focused free)
+//   Auto     : openrouter/free                         (always works)
 
 const BASE = "https://openrouter.ai/api/v1";
 
 // Free model cascade for client-side streaming
 const CLIENT_MODELS = [
-  "google/gemini-2.5-flash:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "qwen/qwen3-235b-a22b:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "inclusionai/ling-3.0-flash-fin:free",
+  "openrouter/free",
 ] as const;
 
 type ClientModel = (typeof CLIENT_MODELS)[number];

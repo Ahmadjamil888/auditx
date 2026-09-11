@@ -4,10 +4,9 @@
 // at https://openrouter.ai/api/v1 and supports 400+ models through a single key.
 //
 // MODEL STRATEGY (free-only, tool-calling capable):
-//   PRIMARY   : google/gemini-2.5-flash:free  — best free tool-calling model
-//   FALLBACK 1: meta-llama/llama-3.3-70b-instruct:free — strong free alternative
-//   FALLBACK 2: qwen/qwen3-235b-a22b:free     — large capable free model
-//   FALLBACK 3: openrouter/free               — OpenRouter auto-selects any free
+//   PRIMARY   : nvidia/nemotron-3-ultra-550b-a55b:free — top free model, 1M context
+//   FALLBACK 1: inclusionai/ling-3.0-flash-fin:free   — finance-focused free model
+//   FALLBACK 2: openrouter/free                       — OpenRouter auto-selects any free
 //                                              model that supports tool calling
 //
 // The resolver cascades through the list, skipping any model that returns a
@@ -33,11 +32,9 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 // genuinely free with no per-token charges.
 
 export const FREE_MODELS = [
-  "google/gemini-2.5-flash:free",         // Best overall: fast, multimodal, tool-calling
-  "meta-llama/llama-3.3-70b-instruct:free", // Strong reasoning + function calling
-  "qwen/qwen3-235b-a22b:free",            // Large context, good at structured tasks
-  "deepseek/deepseek-r1:free",            // Strong reasoning free model
-  "openrouter/free",                       // OpenRouter auto-router — picks best free
+  "nvidia/nemotron-3-ultra-550b-a55b:free",  // Top free model: 1M context, strong reasoning
+  "inclusionai/ling-3.0-flash-fin:free",     // Finance-focused free model
+  "openrouter/free",                          // OpenRouter auto-router — picks best free
 ] as const;
 
 export type FreeModel = (typeof FREE_MODELS)[number];

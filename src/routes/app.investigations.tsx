@@ -404,7 +404,7 @@ function Investigations() {
           "X-Title": "AuditX",
         },
         body: JSON.stringify({
-          model: "meta-llama/llama-3.3-70b-instruct:free",
+          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
           messages: [{ role: "user", content: aiPrompt }],
           temperature: 0.3,
           max_tokens: 1500,

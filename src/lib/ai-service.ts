@@ -1,8 +1,9 @@
 // ─── AuditX AI Service — Agentic pipeline on OpenRouter ─────────────────────
 //
 // MODEL CASCADE (free tier models on OpenRouter):
-//   1. meta-llama/llama-3.3-70b-instruct:free  → primary
-//   2. mistralai/mistral-7b-instruct:free       → fallback
+//   1. nvidia/nemotron-3-ultra-550b-a55b:free  → primary (1M context, top reasoning)
+//   2. inclusionai/ling-3.0-flash-fin:free     → fallback (finance-focused free model)
+//   3. openrouter/free                         → last resort (auto-selected free model)
 //
 // AGENTIC ARCHITECTURE:
 //   • Retry-with-exponential-backoff on quota errors (429 / rate-limit)
@@ -15,10 +16,12 @@
 // ── Model registry ─────────────────────────────────────────────────────────────
 
 const MODELS = {
-  /** Primary: best free-tier price/performance */
-  PRIMARY:  "meta-llama/llama-3.3-70b-instruct:free",
-  /** Fallback: reliable free-tier model */
-  FALLBACK: "mistralai/mistral-7b-instruct:free",
+  /** Primary: top free-tier model, 1M context, strong reasoning */
+  PRIMARY:  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  /** Fallback: finance-focused free model */
+  FALLBACK: "inclusionai/ling-3.0-flash-fin:free",
+  /** Last resort: OpenRouter auto-selects any available free model */
+  AUTO:     "openrouter/free",
 } as const;
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
@@ -172,7 +175,7 @@ interface RunOptions {
 }
 
 async function runWithCascade(opts: RunOptions): Promise<string> {
-  const cascade: ModelKey[] = ["PRIMARY", "FALLBACK"];
+  const cascade: ModelKey[] = ["PRIMARY", "FALLBACK", "AUTO"];
 
   for (const modelKey of cascade) {
     const model = MODELS[modelKey];
