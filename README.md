@@ -216,9 +216,9 @@ Create a `.env` file at the project root (copy from `.env.example`):
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key-here
 
-# Google AI Studio — https://aistudio.google.com/app/apikey
+# OpenRouter — https://openrouter.ai/keys
 # For production: move to server-side env only (remove VITE_ prefix)
-VITE_GOOGLE_AI_API_KEY=your-gemini-api-key-here
+VITE_OPENROUTER_API_KEY=your-openrouter-api-key-here
 
 # Google OAuth Client ID
 VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com

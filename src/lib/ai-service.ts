@@ -1,26 +1,27 @@
-// ─── AuditX AI Service — Agentic pipeline on Google Gemini ───────────────────
+// ─── AuditX AI Service — Agentic pipeline on OpenRouter ─────────────────────
 //
-// MODEL CASCADE (free tier, both stable GA models):
-//   1. gemini-2.5-flash   → primary (best price/performance, free tier)
-//   2. gemini-2.5-pro     → fallback (most capable, lower quota)
+// MODEL CASCADE (free tier models on OpenRouter):
+//   1. meta-llama/llama-3.3-70b-instruct:free  → primary
+//   2. mistralai/mistral-7b-instruct:free       → fallback
 //
 // AGENTIC ARCHITECTURE:
-//   • Retry-with-exponential-backoff on quota errors (429 / RESOURCE_EXHAUSTED)
-//   • Model cascade: if flash quota exhausted, promote to pro automatically
+//   • Retry-with-exponential-backoff on quota errors (429 / rate-limit)
+//   • Model cascade: if primary quota exhausted, promotes to fallback
 //   • Per-task specialised system prompts (parse / anomaly / tax / portfolio)
 //   • safeParseJSON strips accidental markdown fences from model output
 
 // @ts-nocheck
-import { GoogleGenAI } from "@google/genai";
 
 // ── Model registry ─────────────────────────────────────────────────────────────
 
 const MODELS = {
   /** Primary: best free-tier price/performance */
-  FLASH: "gemini-2.5-flash",
-  /** Fallback: most capable, lower quota */
-  PRO:   "gemini-2.5-pro",
+  PRIMARY:  "meta-llama/llama-3.3-70b-instruct:free",
+  /** Fallback: reliable free-tier model */
+  FALLBACK: "mistralai/mistral-7b-instruct:free",
 } as const;
+
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 type ModelKey = keyof typeof MODELS;
 
@@ -63,15 +64,51 @@ export interface TaxExplanation {
 
 // ── Client factory ─────────────────────────────────────────────────────────────
 
-function getClient(): GoogleGenAI {
-  const key = (import.meta.env['VITE_GOOGLE_AI_API_KEY'] as string | undefined) ?? "";
+function getApiKey(): string {
+  const key = (import.meta.env['VITE_OPENROUTER_API_KEY'] as string | undefined) ?? "";
   if (!key || key.length < 10) {
     throw new Error(
-      "Google AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file. " +
-      "Get a free key at https://aistudio.google.com/app/apikey",
+      "AuditX Intelligence: AI API key not configured. Add VITE_OPENROUTER_API_KEY to your .env file. " +
+      "Get a free key at https://openrouter.ai",
     );
   }
-  return new GoogleGenAI({ apiKey: key });
+  return key;
+}
+
+async function openRouterChat(
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  opts: { temperature?: number; maxTokens?: number; responseFormat?: "json" } = {},
+): Promise<string> {
+  const key = getApiKey();
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: opts.temperature ?? 0.3,
+    max_tokens: opts.maxTokens ?? 1024,
+  };
+  if (opts.responseFormat === "json") {
+    body["response_format"] = { type: "json_object" };
+  }
+
+  const resp = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://auditx.app",
+      "X-Title": "AuditX",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => resp.statusText);
+    throw new Error(`OpenRouter ${resp.status}: ${errText}`);
+  }
+
+  const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return data.choices?.[0]?.message?.content ?? "";
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -123,36 +160,41 @@ function safeParseJSON(raw: string): Record<string, unknown> {
 }
 
 // ── Agentic model runner ───────────────────────────────────────────────────────
-// Tries LITE first; on quota error cascades to FLASH; retries with backoff.
+// Tries PRIMARY first; on quota error cascades to FALLBACK; retries with backoff.
 
 interface RunOptions {
-  contents:    unknown;
-  config:      Record<string, unknown>;
+  system:      string;
+  userText:    string;
+  temperature?: number;
+  maxTokens?:   number;
+  responseFormat?: "json";
   taskLabel?:  string;
 }
 
 async function runWithCascade(opts: RunOptions): Promise<string> {
-  const ai = getClient();
-  const cascade: ModelKey[] = ["FLASH", "PRO"];
+  const cascade: ModelKey[] = ["PRIMARY", "FALLBACK"];
 
   for (const modelKey of cascade) {
     const model = MODELS[modelKey];
-    const maxRetries = false ? 2 : 1;
+    const maxRetries = 1;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 0) {
-          // Exponential backoff: 1s, 2s
           await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
 
-        const response = await ai.models.generateContent({
-          model,
-          contents: opts.contents as Parameters<typeof ai.models.generateContent>[0]["contents"],
-          config:   opts.config  as Parameters<typeof ai.models.generateContent>[0]["config"],
+        const messages = [
+          { role: "system", content: opts.system },
+          { role: "user",   content: opts.userText },
+        ];
+
+        const text = await openRouterChat(model, messages, {
+          temperature: opts.temperature,
+          maxTokens:   opts.maxTokens,
+          responseFormat: opts.responseFormat,
         });
 
-        const text = response.text ?? "";
         if (!text.trim()) throw new Error("Empty response from model.");
         return text;
 
@@ -160,20 +202,19 @@ async function runWithCascade(opts: RunOptions): Promise<string> {
         const isLast = attempt === maxRetries && modelKey === cascade[cascade.length - 1];
 
         if (isQuotaError(e)) {
-          if (attempt < maxRetries) continue;          // retry same model
+          if (attempt < maxRetries) continue;
           console.warn(`[AuditX AI] Quota exhausted on ${model}, cascading…`);
-          break;                                       // try next model
+          break;
         }
 
-        if (isLast) throw e;                           // non-quota error on last attempt
-        if (!isQuotaError(e)) throw e;                 // non-quota error → don't retry
+        if (isLast) throw e;
+        if (!isQuotaError(e)) throw e;
       }
     }
   }
 
   throw new Error(
-    "All Google AI models are currently rate-limited. Please wait a minute and try again. " +
-    "Free tier limits: gemini-2.5-flash-lite (1 000 req/day), gemini-2.5-flash (250 req/day).",
+    "All AI models are currently rate-limited. Please wait a minute and try again.",
   );
 }
 
@@ -287,23 +328,16 @@ export async function parseDocument(
   mimeType:   string,
   filename:   string,
 ): Promise<ParsedStatement> {
+  // OpenRouter text-only models can't process raw binary/base64.
+  // We'll send the filename hint and ask the model to return a safe default
+  // that will be flagged for manual review.
   const text = await runWithCascade({
     taskLabel: "parse-document",
-    contents: [
-      {
-        role:  "user",
-        parts: [
-          { inlineData: { data: fileBase64, mimeType } },
-          { text: `Parse this trade confirmation (${filename}). Return only the JSON.` },
-        ],
-      },
-    ],
-    config: {
-      systemInstruction: PARSE_SYSTEM,
-      responseMimeType:  "application/json",
-      temperature:       0.1,
-      maxOutputTokens:   1024,
-    },
+    system: PARSE_SYSTEM,
+    userText: `Parse this trade confirmation (${filename}). The file is a binary document (${mimeType}). If you cannot extract data, return a JSON with null values and set all confidences to 0.1 to flag for manual review. Return only the JSON.`,
+    temperature: 0.1,
+    maxTokens: 1024,
+    responseFormat: "json",
   });
 
   const parsed = safeParseJSON(text);
@@ -329,22 +363,11 @@ export async function parseTextDocument(
   // For single trade confirmations, use AI parsing
   const text = await runWithCascade({
     taskLabel: "parse-text",
-    contents: [
-      {
-        role:  "user",
-        parts: [
-          {
-            text: `Parse this trade confirmation text (${filename}):\n\n${textContent.slice(0, 6000)}\n\nReturn only the JSON.`,
-          },
-        ],
-      },
-    ],
-    config: {
-      systemInstruction: PARSE_SYSTEM,
-      responseMimeType:  "application/json",
-      temperature:       0.1,
-      maxOutputTokens:   2048, // Increased for safety
-    },
+    system: PARSE_SYSTEM,
+    userText: `Parse this trade confirmation text (${filename}):\n\n${textContent.slice(0, 6000)}\n\nReturn only the JSON.`,
+    temperature: 0.1,
+    maxTokens: 2048,
+    responseFormat: "json",
   });
 
   const parsed = safeParseJSON(text);
@@ -453,28 +476,17 @@ export async function explainAnomaly(
   try {
     const text = await runWithCascade({
       taskLabel: "explain-anomaly",
-      contents: [
-        {
-          role:  "user",
-          parts: [
-            {
-              text:
-                `You are a financial compliance expert for ${jurisdiction} markets.\n` +
-                `A reconciliation engine detected:\n` +
-                `- Flag: ${flagType}\n` +
-                `- Ticker: ${ticker}\n` +
-                `- Expected: ${JSON.stringify(expected)}\n` +
-                `- Actual: ${JSON.stringify(actual)}\n\n` +
-                `Return ONLY this JSON (no markdown):\n` +
-                `{"summary":"1-2 sentences","severity":"low|medium|high","recommended_action":"what to do"}`,
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        temperature:      0.2,
-      },
+      system: `You are a financial compliance expert for ${jurisdiction} markets.`,
+      userText:
+        `A reconciliation engine detected:\n` +
+        `- Flag: ${flagType}\n` +
+        `- Ticker: ${ticker}\n` +
+        `- Expected: ${JSON.stringify(expected)}\n` +
+        `- Actual: ${JSON.stringify(actual)}\n\n` +
+        `Return ONLY this JSON (no markdown):\n` +
+        `{"summary":"1-2 sentences","severity":"low|medium|high","recommended_action":"what to do"}`,
+      temperature: 0.2,
+      responseFormat: "json",
     });
 
     return safeParseJSON(text) as any as AnomalyExplanation;
@@ -500,29 +512,18 @@ export async function explainTaxComputation(
     const currency = jurisdiction === "PSX" ? "PKR" : "INR";
     const text = await runWithCascade({
       taskLabel: "explain-tax",
-      contents: [
-        {
-          role:  "user",
-          parts: [
-            {
-              text:
-                `You are a tax advisor for ${jurisdiction} equity investors.\n` +
-                `Computed results (by deterministic FIFO engine — not AI):\n` +
-                `- Short-term gains: ${currency} ${shortTermGain.toLocaleString()}\n` +
-                `- Long-term gains:  ${currency} ${longTermGain.toLocaleString()}\n` +
-                `- Estimated tax due: ${currency} ${estimatedTaxDue.toLocaleString()}\n` +
-                `- Filer status: ${filerStatus}\n\n` +
-                `Explain in plain English for a retail trader with no accounting background.\n` +
-                `Return ONLY this JSON (no markdown):\n` +
-                `{"plain_english":"2-3 sentences","key_points":["p1","p2","p3"],"disclaimer":"short"}`,
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        temperature:      0.3,
-      },
+      system: `You are a tax advisor for ${jurisdiction} equity investors.`,
+      userText:
+        `Computed results (by deterministic FIFO engine — not AI):\n` +
+        `- Short-term gains: ${currency} ${shortTermGain.toLocaleString()}\n` +
+        `- Long-term gains:  ${currency} ${longTermGain.toLocaleString()}\n` +
+        `- Estimated tax due: ${currency} ${estimatedTaxDue.toLocaleString()}\n` +
+        `- Filer status: ${filerStatus}\n\n` +
+        `Explain in plain English for a retail trader with no accounting background.\n` +
+        `Return ONLY this JSON (no markdown):\n` +
+        `{"plain_english":"2-3 sentences","key_points":["p1","p2","p3"],"disclaimer":"short"}`,
+      temperature: 0.3,
+      responseFormat: "json",
     });
 
     return safeParseJSON(text) as any as TaxExplanation;
@@ -551,23 +552,15 @@ export async function analyzePortfolio(
     const currency = jurisdiction === "PSX" ? "PKR" : "INR";
     const text = await runWithCascade({
       taskLabel: "portfolio-analysis",
-      contents: [
-        {
-          role:  "user",
-          parts: [
-            {
-              text:
-                `You are a portfolio analyst for ${jurisdiction} equity markets.\n` +
-                `Realized gain/loss: ${currency} ${realizedGain.toLocaleString()}.\n` +
-                `Positions: ${JSON.stringify(holdings.slice(0, 8))}.\n\n` +
-                `Write a 2-3 sentence portfolio health summary in plain English.\n` +
-                `Focus on: concentration risk, holding-period mix, overall performance.\n` +
-                `Do NOT recommend specific buy/sell actions. Plain text only.`,
-            },
-          ],
-        },
-      ],
-      config: { temperature: 0.4, maxOutputTokens: 220 },
+      system: `You are a portfolio analyst for ${jurisdiction} equity markets.`,
+      userText:
+        `Realized gain/loss: ${currency} ${realizedGain.toLocaleString()}.\n` +
+        `Positions: ${JSON.stringify(holdings.slice(0, 8))}.\n\n` +
+        `Write a 2-3 sentence portfolio health summary in plain English.\n` +
+        `Focus on: concentration risk, holding-period mix, overall performance.\n` +
+        `Do NOT recommend specific buy/sell actions. Plain text only.`,
+      temperature: 0.4,
+      maxTokens: 220,
     });
 
     return text.trim();

@@ -17,7 +17,6 @@ import {
   X,
 } from "lucide-react";
 import { useState, useCallback } from "react";
-import { GoogleGenAI } from "@google/genai";
 import { useAuth } from "@/lib/auth-context";
 import {
   detectIntent,
@@ -29,6 +28,7 @@ import {
   getFinancialHealth,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
+import { streamCompletion, isKeyMissing } from "@/lib/openrouter-client";
 
 // ── Context-aware suggestions ─────────────────────────────────────────────────
 
@@ -139,9 +139,8 @@ export function ContextualIntelligencePanel({ currentPage, entityId, isOpen = tr
     async (prompt: string) => {
       if (!profile?.org_id) return;
 
-      const apiKey = (import.meta.env["VITE_GOOGLE_AI_API_KEY"] as string | undefined) ?? "";
-      if (!apiKey || apiKey.length < 10) {
-        setResponse("AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file.");
+      if (isKeyMissing()) {
+        setResponse("Add VITE_OPENROUTER_API_KEY to your environment variables to enable AI.");
         setHasResponse(true);
         return;
       }
@@ -189,19 +188,14 @@ export function ContextualIntelligencePanel({ currentPage, entityId, isOpen = tr
           taxYear: toolCtx.taxYear,
         });
 
-        const ai = new GoogleGenAI({ apiKey });
-        const stream = await ai.models.generateContentStream({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-          config: { temperature: 0.3, maxOutputTokens: 512 },
-        });
-
         setLoadingState(null);
-        let full = "";
-        for await (const chunk of stream) {
-          const t = chunk.text ?? "";
-          full += t;
-          setResponse(full);
+        for await (const chunk of streamCompletion({
+          systemPrompt: "You are AuditX Intelligence. Provide concise, evidence-based financial analysis. Only use numbers from the data provided.",
+          userPrompt: finalPrompt,
+          maxTokens: 512,
+          temperature: 0.3,
+        })) {
+          setResponse((prev) => prev + chunk);
         }
       } catch (err) {
         setResponse(`Analysis error: ${(err as Error).message}`);

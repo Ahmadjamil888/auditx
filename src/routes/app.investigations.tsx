@@ -28,7 +28,6 @@ import { useAuth } from "@/lib/auth-context";
 import { useTransactions, useReconciliationFlags } from "@/lib/data-hooks";
 import { computeTax } from "@/lib/tax";
 import { computePortfolioSummary, computeHealthScore } from "@/lib/financial-intelligence";
-import { GoogleGenAI } from "@google/genai";
 import { buildIntelligencePrompt, detectIntent, getPortfolioSummary, getTaxLiability, getUnreconciledTransactions, getCriticalAnomalies, getBrokerDiscrepancies, getMissingDocuments, type IntelligenceToolContext } from "@/lib/intelligence-tools";
 
 export const Route = createFileRoute("/app/investigations")({
@@ -338,9 +337,9 @@ function Investigations() {
   async function runInvestigation(config: InvestigationConfig) {
     if (!profile?.org_id) return;
 
-    const apiKey = (import.meta.env["VITE_GOOGLE_AI_API_KEY"] as string | undefined) ?? "";
+    const apiKey = (import.meta.env["VITE_OPENROUTER_API_KEY"] as string | undefined) ?? "";
     if (!apiKey || apiKey.length < 10) {
-      alert("AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file.");
+      alert("AI API key not configured. Add VITE_OPENROUTER_API_KEY to your .env file.");
       return;
     }
 
@@ -396,15 +395,28 @@ function Investigations() {
 
       setProgress((p) => [...p.slice(-4), "Generating intelligence report…"]);
 
-      const ai = new GoogleGenAI({ apiKey });
-      let aiReport = "";
-      const stream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: aiPrompt }] }],
-        config: { temperature: 0.3, maxOutputTokens: 1500 },
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://auditx.app",
+          "X-Title": "AuditX",
+        },
+        body: JSON.stringify({
+          model: "meta-llama/llama-3.3-70b-instruct:free",
+          messages: [{ role: "user", content: aiPrompt }],
+          temperature: 0.3,
+          max_tokens: 1500,
+        }),
       });
-      for await (const chunk of stream) {
-        aiReport += chunk.text ?? "";
+
+      let aiReport = "";
+      if (resp.ok) {
+        const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+        aiReport = data.choices?.[0]?.message?.content ?? "";
+      } else {
+        aiReport = `Investigation could not complete: OpenRouter returned ${resp.status}. Please check your API key.`;
       }
 
       // Compute summary stats

@@ -25,10 +25,10 @@ import {
   useState,
 } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { GoogleGenAI } from "@google/genai";
 import { useAuth } from "@/lib/auth-context";
 import { useAIContext } from "@/lib/financial-intelligence-hooks";
 import { detectIntent, buildIntelligencePrompt, getPortfolioSummary, getTaxLiability, getUnreconciledTransactions, getCriticalAnomalies, getFinancialHealth, type IntelligenceToolContext } from "@/lib/intelligence-tools";
+import { streamCompletion, isKeyMissing } from "@/lib/openrouter-client";
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
 
@@ -132,9 +132,8 @@ export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
     async (prompt: string) => {
       if (!profile?.org_id) return;
 
-      const apiKey = (import.meta.env["VITE_GOOGLE_AI_API_KEY"] as string | undefined) ?? "";
-      if (!apiKey || apiKey.length < 10) {
-        setAIResponse("AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file.");
+      if (isKeyMissing()) {
+        setAIResponse("AI is not configured. Add VITE_OPENROUTER_API_KEY to your environment variables.");
         setHasResponse(true);
         return;
       }
@@ -197,20 +196,14 @@ export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
           taxYear: toolCtx.taxYear,
         });
 
-        const ai = new GoogleGenAI({ apiKey });
-        const stream = await ai.models.generateContentStream({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-          config: { temperature: 0.3, maxOutputTokens: 1024 },
-        });
-
         setLoadingState(null);
-        let full = "";
-        for await (const chunk of stream) {
-          const t = chunk.text ?? "";
-          if (!t) continue;
-          full += t;
-          setAIResponse(full);
+        for await (const chunk of streamCompletion({
+          systemPrompt: "You are AuditX Intelligence, a financial audit assistant. Be concise, precise, and reference specific numbers from the data provided. Never invent figures.",
+          userPrompt: finalPrompt,
+          maxTokens: 1024,
+          temperature: 0.3,
+        })) {
+          setAIResponse((prev) => prev + chunk);
         }
       } catch (err) {
         setAIResponse(`Unable to complete analysis: ${(err as Error).message}`);

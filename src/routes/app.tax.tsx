@@ -44,7 +44,7 @@ function TaxCenter() {
       );
       setAiExplanation(result.plain_english);
     } catch {
-      setAiExplanation("AI explanation requires VITE_GOOGLE_AI_API_KEY to be configured.");
+      setAiExplanation("AI explanation requires VITE_OPENROUTER_API_KEY to be configured.");
     } finally {
       setLoadingAI(false);
     }

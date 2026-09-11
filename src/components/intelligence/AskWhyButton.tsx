@@ -5,17 +5,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { HelpCircle, Loader2, Sparkles, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { GoogleGenAI } from "@google/genai";
 import { useAuth } from "@/lib/auth-context";
 import {
   getTaxLiability,
   getPortfolioSummary,
   getUnreconciledTransactions,
-  getCriticalAnomalies,
   buildIntelligencePrompt,
   detectIntent,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
+import { streamCompletion, isKeyMissing } from "@/lib/openrouter-client";
 
 export interface AskWhyContext {
   metric: string;
@@ -41,9 +40,8 @@ export function AskWhyButton({ context, className }: Props) {
   const load = useCallback(async () => {
     if (!profile?.org_id || hasLoaded) return;
 
-    const apiKey = (import.meta.env["VITE_GOOGLE_AI_API_KEY"] as string | undefined) ?? "";
-    if (!apiKey || apiKey.length < 10) {
-      setResponse("Configure VITE_GOOGLE_AI_API_KEY to enable explanations.");
+    if (isKeyMissing()) {
+      setResponse("Add VITE_OPENROUTER_API_KEY to your environment variables to enable explanations.");
       setHasLoaded(true);
       return;
     }
@@ -84,18 +82,13 @@ export function AskWhyButton({ context, className }: Props) {
         taxYear: toolCtx.taxYear,
       });
 
-      const ai = new GoogleGenAI({ apiKey });
-      const stream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-        config: { temperature: 0.3, maxOutputTokens: 400 },
-      });
-
-      let full = "";
-      for await (const chunk of stream) {
-        const t = chunk.text ?? "";
-        full += t;
-        setResponse(full);
+      for await (const chunk of streamCompletion({
+        systemPrompt: "You are AuditX Intelligence. Explain financial metrics clearly and concisely. Only reference numbers from the provided data.",
+        userPrompt: finalPrompt,
+        maxTokens: 400,
+        temperature: 0.3,
+      })) {
+        setResponse((prev) => prev + chunk);
       }
       setHasLoaded(true);
     } catch (err) {

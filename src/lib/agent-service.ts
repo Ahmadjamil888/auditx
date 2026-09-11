@@ -1,10 +1,9 @@
 // ─── AuditX agent service ─────────────────────────────────────────────────────
 // UI-agnostic orchestration layer:
 //   ChatComposer → AgentRequest → (extraction + streaming AI) → AgentActivity / AIMessage
-// Model cascade: gemini-2.5-flash-lite (1 000 RPD) → gemini-2.5-flash (250 RPD)
+// Model cascade: meta-llama/llama-3.3-70b-instruct:free → mistralai/mistral-7b-instruct:free
 
 // @ts-nocheck
-import { GoogleGenAI } from "@google/genai";
 import { parseDocument, parseTextDocument, type ExtractedField } from "@/lib/ai-service";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,48 +98,104 @@ export function textToAttachment(name: string, text: string): AgentAttachment {
   };
 }
 
-function getClient(): GoogleGenAI {
-  const key = (import.meta.env["VITE_GOOGLE_AI_API_KEY"] as string | undefined) ?? "";
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+
+function getApiKey(): string {
+  const key = (import.meta.env["VITE_OPENROUTER_API_KEY"] as string | undefined) ?? "";
   if (!key || key.length < 10) {
     throw new Error(
-      "Google AI API key not configured. Add VITE_GOOGLE_AI_API_KEY to your .env file.",
+      "AuditX Intelligence: AI API key not configured. Add VITE_OPENROUTER_API_KEY to your .env file.",
     );
   }
-  return new GoogleGenAI({ apiKey: key });
+  return key;
 }
 
-function isQuotaError(e: unknown): boolean {
-  const msg = String((e as Error)?.message ?? "").toLowerCase();
-  return (
-    msg.includes("429") ||
-    msg.includes("quota") ||
-    msg.includes("resource_exhausted") ||
-    msg.includes("rate limit")
-  );
-}
 
-// ── Streaming cascade: lite → flash ──────────────────────────────────────────
+// ── Streaming cascade: primary → fallback ─────────────────────────────────────
 
 const STREAM_MODELS = [
-  "gemini-2.5-flash",  // primary — free tier
-  "gemini-2.5-pro",    // fallback — most capable
+  "meta-llama/llama-3.3-70b-instruct:free",  // primary — free tier
+  "mistralai/mistral-7b-instruct:free",       // fallback — reliable free tier
 ] as const;
 
 async function streamWithCascade(
-  ai: GoogleGenAI,
-  contents: unknown,
-  config: Record<string, unknown>,
-): Promise<AsyncGenerator<any>> {
+  contents: Array<{ role: string; parts: Array<{ text?: string }> }>,
+  config: { systemInstruction?: string; temperature?: number; maxOutputTokens?: number },
+  onDelta: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const key = getApiKey();
+
+  // Build OpenAI-compatible messages array
+  const messages: Array<{ role: string; content: string }> = [];
+  if (config.systemInstruction) {
+    messages.push({ role: "system", content: config.systemInstruction });
+  }
+  for (const turn of contents) {
+    const text = turn.parts.map((p) => p.text ?? "").join("\n");
+    messages.push({ role: turn.role === "model" ? "assistant" : turn.role, content: text });
+  }
+
   for (let i = 0; i < STREAM_MODELS.length; i++) {
     const model = STREAM_MODELS[i]!;
     try {
-      return await (ai.models.generateContentStream({
-        model,
-        contents: contents as Parameters<typeof ai.models.generateContentStream>[0]["contents"],
-        config:   (config as any) as Parameters<typeof ai.models.generateContentStream>[0]["config"],
-      }) as any);
+      const resp = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://auditx.app",
+          "X-Title": "AuditX",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: true,
+          temperature: config.temperature ?? 0.35,
+          max_tokens: config.maxOutputTokens ?? 2048,
+        }),
+        signal,
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => resp.statusText);
+        const err = new Error(`OpenRouter ${resp.status}: ${errText}`);
+        if (resp.status === 429 && i < STREAM_MODELS.length - 1) {
+          console.warn(`[AuditX agent] Quota on ${model}, trying ${STREAM_MODELS[i + 1]}…`);
+          continue;
+        }
+        throw err;
+      }
+
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          const trimmed = line.replace(/^data: /, "").trim();
+          if (!trimmed || trimmed === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(trimmed);
+            const delta = parsed.choices?.[0]?.delta?.content ?? "";
+            if (delta) {
+              full += delta;
+              onDelta(full);
+            }
+          } catch {
+            // skip malformed SSE lines
+          }
+        }
+      }
+
+      return full;
     } catch (e) {
-      if (isQuotaError(e) && i < STREAM_MODELS.length - 1) {
+      const msg = String((e as Error)?.message ?? "").toLowerCase();
+      const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("rate limit");
+      if (isQuota && i < STREAM_MODELS.length - 1) {
         console.warn(`[AuditX agent] Quota on ${model}, trying ${STREAM_MODELS[i + 1]}…`);
         continue;
       }
@@ -249,27 +304,26 @@ export async function runAgent(req: AgentRequest): Promise<string> {
   set("analyze", "active");
 
   // ── Step 3: stream with model cascade ─────────────────────────────────────
-  const ai = getClient();
-  const stream = await streamWithCascade(ai, contents, {
-    systemInstruction: ANALYST_SYSTEM,
-    temperature: 0.35,
-    maxOutputTokens: 2048,
-  });
-
   let full = "";
   let composing = false;
-  for await (const chunk of stream) {
-    if (req.signal?.aborted) break;
-    const t = chunk.text ?? "";
-    if (!t) continue;
-    full += t;
-    if (!composing && full.length > 40) {
-      composing = true;
-      set("analyze", "done");
-      set("compose", "active");
-    }
-    req.onDelta(full);
-  }
+
+  full = await streamWithCascade(
+    contents as Array<{ role: string; parts: Array<{ text?: string }> }>,
+    {
+      systemInstruction: ANALYST_SYSTEM,
+      temperature: 0.35,
+      maxOutputTokens: 2048,
+    },
+    (text) => {
+      if (!composing && text.length > 40) {
+        composing = true;
+        set("analyze", "done");
+        set("compose", "active");
+      }
+      req.onDelta(text);
+    },
+    req.signal,
+  );
 
   set("analyze", "done");
   set("compose", "done");
