@@ -56,13 +56,17 @@ export function LandingComposer() {
   const goToWorkspace = (prompt: string, attached: File[]) => {
     const text    = prompt.trim();
     const message = text || "Analyse the attached document(s).";
+    // Always persist the prompt first — it survives the auth redirect
     saveComposerDraft("landing", message);
     setPendingPrompt(message);
     setPendingFiles(attached);
     if (!loading && session) {
       navigate({ to: "/app/parser" });
     } else {
-      navigate({ to: "/signup" });
+      // Redirect to signin (existing users) — signup link is available there too.
+      // The pending prompt is in localStorage and will auto-fire once the
+      // workspace opens after authentication.
+      navigate({ to: "/signin" });
     }
   };
 

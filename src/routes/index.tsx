@@ -9,8 +9,6 @@ import {
   Lock,
   ScanSearch,
   Shield,
-  ShieldCheck,
-  Sparkles,
   TrendingUp,
 } from "lucide-react";
 import { LandingComposer } from "@/components/site/LandingComposer";
@@ -165,22 +163,8 @@ function Home() {
         />
 
         <div className="relative z-10 mx-auto w-full max-w-[800px] text-center">
-          {/* Eyebrow */}
-          <motion.div
-            variants={reveal}
-            custom={0}
-            initial="hidden"
-            animate="visible"
-            className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold"
-            style={{
-              background: "rgba(115,66,226,0.08)",
-              border: "1px solid rgba(115,66,226,0.18)",
-              color: "var(--color-accent)",
-            }}
-          >
-            <Sparkles size={12} strokeWidth={2} />
-            Agentic AI · Evidence-backed · Deterministic Math
-          </motion.div>
+          {/* Spacer to maintain visual rhythm where the eyebrow was */}
+          <div className="mb-6 h-9" aria-hidden />
 
           {/* Headline */}
           <motion.h1

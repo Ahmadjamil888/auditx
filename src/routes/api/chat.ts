@@ -3,7 +3,12 @@ import { convertToModelMessages, generateText, stepCountIs, streamText, tool, ty
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/lib/database.types";
-import { resolveAgentModel } from "@/lib/audit-agent.server";
+import {
+  resolveAgentModel,
+  getModelCascade,
+  isQuotaError,
+  FREE_MODELS,
+} from "@/lib/audit-agent.server";
 import { computeTax } from "@/lib/tax";
 import { computePortfolioSummary } from "@/lib/financial-intelligence";
 import type { Transaction } from "@/lib/demo-data";
@@ -174,7 +179,10 @@ export const Route = createFileRoute("/api/chat")({
         if (!url || !key) return new Response("Database configuration is missing", { status: 500 });
 
         const resolved = await resolveAgentModel();
-        if (!resolved) return new Response("AI configuration is missing", { status: 500 });
+        if (!resolved) {
+          const key404Msg = "AI is not configured — add OPENROUTER_API_KEY to your environment variables.";
+          return new Response(key404Msg, { status: 500 });
+        }
         const model = resolved.model;
 
         const supabase = createClient<Database>(url, key, {
@@ -248,12 +256,26 @@ export const Route = createFileRoute("/api/chat")({
               context: z.string(),
             }),
             execute: async ({ agent, objective, context }) => {
-              const { text: findings } = await generateText({
-                model,
-                system: `${SPECIALISTS[agent]}\n\nReturn compact markdown: findings, figures, evidence references, and a confidence rating (high/medium/low). Never expose hidden reasoning.`,
-                prompt: `Objective:\n${objective}\n\nData and context:\n${context.slice(0, 40000)}`,
-              });
-              return { agent, findings };
+              // Use model cascade for specialist sub-tasks: try each free model
+              // in order until one succeeds, to maximise free-tier availability.
+              const openRouterKey = process.env["OPENROUTER_API_KEY"] ?? "";
+              const cascade = openRouterKey ? getModelCascade(openRouterKey) : [{ id: FREE_MODELS[0], model }];
+              let lastError: unknown;
+              for (const { id: modelId, model: cascadeModel } of cascade) {
+                try {
+                  const { text: findings } = await generateText({
+                    model: cascadeModel,
+                    system: `${SPECIALISTS[agent]}\n\nReturn compact markdown: findings, figures, evidence references, and a confidence rating (high/medium/low). Never expose hidden reasoning.`,
+                    prompt: `Objective:\n${objective}\n\nData and context:\n${context.slice(0, 40000)}`,
+                  });
+                  return { agent, findings, model_used: modelId };
+                } catch (e) {
+                  lastError = e;
+                  if (!isQuotaError(e)) throw e; // non-quota errors should bubble up
+                  console.warn(`[AuditX delegate_agent] Quota on ${modelId}, trying next…`);
+                }
+              }
+              throw lastError ?? new Error("All free models quota-exhausted for specialist task.");
             },
           }),
           calculate: tool({
