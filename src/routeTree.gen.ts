@@ -26,6 +26,8 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentRouteImport } from './routes/app.agent'
 import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
+import { Route as AppInsightsRouteImport } from './routes/app.insights'
+import { Route as AppInvestigationsRouteImport } from './routes/app.investigations'
 import { Route as AppLedgerRouteImport } from './routes/app.ledger'
 import { Route as AppOverviewRouteImport } from './routes/app.overview'
 import { Route as AppParserRouteImport } from './routes/app.parser'
@@ -33,6 +35,7 @@ import { Route as AppReconciliationRouteImport } from './routes/app.reconciliati
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppTaxRouteImport } from './routes/app.tax'
+import { Route as AppTimelineRouteImport } from './routes/app.timeline'
 import { Route as AppParserIndexRouteImport } from './routes/app.parser.index'
 import { Route as AppParserThreadIdRouteImport } from './routes/app.parser.$threadId'
 
@@ -121,6 +124,16 @@ const AppBillingRoute = AppBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInsightsRoute = AppInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvestigationsRoute = AppInvestigationsRouteImport.update({
+  id: '/investigations',
+  path: '/investigations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLedgerRoute = AppLedgerRouteImport.update({
   id: '/ledger',
   path: '/ledger',
@@ -156,6 +169,11 @@ const AppTaxRoute = AppTaxRouteImport.update({
   path: '/tax',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTimelineRoute = AppTimelineRouteImport.update({
+  id: '/timeline',
+  path: '/timeline',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppParserIndexRoute = AppParserIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -184,6 +202,8 @@ export interface FileRoutesByFullPath {
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/insights': typeof AppInsightsRoute
+  '/app/investigations': typeof AppInvestigationsRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
   '/app/parser': typeof AppParserRouteWithChildren
@@ -191,7 +211,11 @@ export interface FileRoutesByFullPath {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+<<<<<<< Updated upstream
   '/app/': typeof AppIndexRoute
+=======
+  '/app/timeline': typeof AppTimelineRoute
+>>>>>>> Stashed changes
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser/': typeof AppParserIndexRoute
 }
@@ -211,13 +235,19 @@ export interface FileRoutesByTo {
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/insights': typeof AppInsightsRoute
+  '/app/investigations': typeof AppInvestigationsRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+<<<<<<< Updated upstream
   '/app': typeof AppIndexRoute
+=======
+  '/app/timeline': typeof AppTimelineRoute
+>>>>>>> Stashed changes
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser': typeof AppParserIndexRoute
 }
@@ -239,6 +269,8 @@ export interface FileRoutesById {
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/insights': typeof AppInsightsRoute
+  '/app/investigations': typeof AppInvestigationsRoute
   '/app/ledger': typeof AppLedgerRoute
   '/app/overview': typeof AppOverviewRoute
   '/app/parser': typeof AppParserRouteWithChildren
@@ -246,7 +278,11 @@ export interface FileRoutesById {
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
+<<<<<<< Updated upstream
   '/app/': typeof AppIndexRoute
+=======
+  '/app/timeline': typeof AppTimelineRoute
+>>>>>>> Stashed changes
   '/app/parser/$threadId': typeof AppParserThreadIdRoute
   '/app/parser/': typeof AppParserIndexRoute
 }
@@ -269,6 +305,8 @@ export interface FileRouteTypes {
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
+    | '/app/insights'
+    | '/app/investigations'
     | '/app/ledger'
     | '/app/overview'
     | '/app/parser'
@@ -276,7 +314,11 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+<<<<<<< Updated upstream
     | '/app/'
+=======
+    | '/app/timeline'
+>>>>>>> Stashed changes
     | '/app/parser/$threadId'
     | '/app/parser/'
   fileRoutesByTo: FileRoutesByTo
@@ -296,13 +338,19 @@ export interface FileRouteTypes {
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
+    | '/app/insights'
+    | '/app/investigations'
     | '/app/ledger'
     | '/app/overview'
     | '/app/reconciliation'
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+<<<<<<< Updated upstream
     | '/app'
+=======
+    | '/app/timeline'
+>>>>>>> Stashed changes
     | '/app/parser/$threadId'
     | '/app/parser'
   id:
@@ -323,6 +371,8 @@ export interface FileRouteTypes {
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
+    | '/app/insights'
+    | '/app/investigations'
     | '/app/ledger'
     | '/app/overview'
     | '/app/parser'
@@ -330,7 +380,11 @@ export interface FileRouteTypes {
     | '/app/reports'
     | '/app/settings'
     | '/app/tax'
+<<<<<<< Updated upstream
     | '/app/'
+=======
+    | '/app/timeline'
+>>>>>>> Stashed changes
     | '/app/parser/$threadId'
     | '/app/parser/'
   fileRoutesById: FileRoutesById
@@ -472,6 +526,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBillingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/insights': {
+      id: '/app/insights'
+      path: '/insights'
+      fullPath: '/app/insights'
+      preLoaderRoute: typeof AppInsightsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/investigations': {
+      id: '/app/investigations'
+      path: '/investigations'
+      fullPath: '/app/investigations'
+      preLoaderRoute: typeof AppInvestigationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/ledger': {
       id: '/app/ledger'
       path: '/ledger'
@@ -521,6 +589,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTaxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/timeline': {
+      id: '/app/timeline'
+      path: '/timeline'
+      fullPath: '/app/timeline'
+      preLoaderRoute: typeof AppTimelineRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/parser/': {
       id: '/app/parser/'
       path: '/'
@@ -556,6 +631,8 @@ interface AppRouteChildren {
   AppAgentRoute: typeof AppAgentRoute
   AppAuditTrailRoute: typeof AppAuditTrailRoute
   AppBillingRoute: typeof AppBillingRoute
+  AppInsightsRoute: typeof AppInsightsRoute
+  AppInvestigationsRoute: typeof AppInvestigationsRoute
   AppLedgerRoute: typeof AppLedgerRoute
   AppOverviewRoute: typeof AppOverviewRoute
   AppParserRoute: typeof AppParserRouteWithChildren
@@ -563,13 +640,19 @@ interface AppRouteChildren {
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTaxRoute: typeof AppTaxRoute
+<<<<<<< Updated upstream
   AppIndexRoute: typeof AppIndexRoute
+=======
+  AppTimelineRoute: typeof AppTimelineRoute
+>>>>>>> Stashed changes
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgentRoute: AppAgentRoute,
   AppAuditTrailRoute: AppAuditTrailRoute,
   AppBillingRoute: AppBillingRoute,
+  AppInsightsRoute: AppInsightsRoute,
+  AppInvestigationsRoute: AppInvestigationsRoute,
   AppLedgerRoute: AppLedgerRoute,
   AppOverviewRoute: AppOverviewRoute,
   AppParserRoute: AppParserRouteWithChildren,
@@ -577,7 +660,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTaxRoute: AppTaxRoute,
+<<<<<<< Updated upstream
   AppIndexRoute: AppIndexRoute,
+=======
+  AppTimelineRoute: AppTimelineRoute,
+>>>>>>> Stashed changes
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

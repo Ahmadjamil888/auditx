@@ -324,6 +324,108 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
       };
+      financial_events: {
+        Row: {
+          id: string;
+          org_id: string;
+          event_type: string;
+          severity: string;
+          title: string;
+          description: string;
+          entity_type: string | null;
+          entity_id: string | null;
+          metadata: Json | null;
+          confidence: number;
+          status: string;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          event_type: string;
+          severity?: string;
+          title: string;
+          description: string;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          metadata?: Json | null;
+          confidence?: number;
+          status?: string;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["financial_events"]["Insert"]>;
+        Relationships: [];
+      };
+      financial_insights: {
+        Row: {
+          id: string;
+          org_id: string;
+          insight_type: string;
+          severity: string;
+          title: string;
+          summary: string;
+          confidence: number;
+          evidence_ids: string[] | null;
+          entity_ids: string[] | null;
+          status: string;
+          created_at: string;
+          expires_at: string | null;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          insight_type: string;
+          severity?: string;
+          title: string;
+          summary: string;
+          confidence?: number;
+          evidence_ids?: string[] | null;
+          entity_ids?: string[] | null;
+          status?: string;
+          created_at?: string;
+          expires_at?: string | null;
+          resolved_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["financial_insights"]["Insert"]>;
+        Relationships: [];
+      };
+      financial_investigations: {
+        Row: {
+          id: string;
+          org_id: string;
+          user_id: string;
+          title: string;
+          investigation_type: string;
+          status: string;
+          scope: Json | null;
+          findings: Json | null;
+          summary: string | null;
+          transactions_analysed: number;
+          documents_analysed: number;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          user_id: string;
+          title: string;
+          investigation_type: string;
+          status?: string;
+          scope?: Json | null;
+          findings?: Json | null;
+          summary?: string | null;
+          transactions_analysed?: number;
+          documents_analysed?: number;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["financial_investigations"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
