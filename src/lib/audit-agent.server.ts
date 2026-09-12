@@ -51,17 +51,17 @@ function resolveApiKey(): string | undefined {
 
 // ── Free models cascade (all support tool calling) ───────────────────────────
 // Listed best-first. delegate_agent tries each in order on quota/provider errors.
+// IMPORTANT: only ":free" suffix models are truly zero-cost on OpenRouter.
+// "openrouter/auto" can route to paid models and burn credits — don't use it.
 //
-//  1. openrouter/auto                        — OpenRouter picks best available free model
-//  2. deepseek/deepseek-r1-0528:free         — strong reasoning
-//  3. deepseek/deepseek-chat-v3-0324:free    — fast, good tool use
-//  4. meta-llama/llama-3.3-70b-instruct:free — reliable, broadly available
-//  5. mistralai/mistral-7b-instruct:free     — lightweight, rarely overloaded
-//  6. nvidia/nemotron-3-ultra-550b-a55b:free — great but often overloaded
-//  7. inclusionai/ling-3.0-flash-fin:free    — finance-focused fallback
+//  1. deepseek/deepseek-r1-0528:free         — strong reasoning, free tier
+//  2. deepseek/deepseek-chat-v3-0324:free    — fast, good tool use, free tier
+//  3. meta-llama/llama-3.3-70b-instruct:free — reliable, broadly available
+//  4. mistralai/mistral-7b-instruct:free     — lightweight, rarely overloaded
+//  5. nvidia/nemotron-3-ultra-550b-a55b:free — great but often overloaded
+//  6. inclusionai/ling-3.0-flash-fin:free    — finance-focused fallback
 
 export const FREE_MODELS = [
-  "openrouter/auto",
   "deepseek/deepseek-r1-0528:free",
   "deepseek/deepseek-chat-v3-0324:free",
   "meta-llama/llama-3.3-70b-instruct:free",
@@ -127,11 +127,15 @@ export async function resolveAgentModel(): Promise<ResolvedModel | null> {
 export function isProviderError(e: unknown): boolean {
   const msg  = String((e as Error)?.message ?? "").toLowerCase();
   const code = (e as { code?: number | string })?.code;
+  // status field is set by the AI SDK on API errors
+  const status = (e as { status?: number })?.status;
   return (
+    msg.includes("402") ||
     msg.includes("429") ||
     msg.includes("502") ||
     msg.includes("503") ||
     msg.includes("quota") ||
+    msg.includes("credits") ||
     msg.includes("resource_exhausted") ||
     msg.includes("rate limit") ||
     msg.includes("rate-limit") ||
@@ -139,9 +143,15 @@ export function isProviderError(e: unknown): boolean {
     msg.includes("temporarily unavailable") ||
     msg.includes("upstream error") ||
     msg.includes("provider_unavailable") ||
+    msg.includes("requires more credits") ||
+    code === 402 ||
     code === 429 ||
     code === 502 ||
-    code === 503
+    code === 503 ||
+    status === 402 ||
+    status === 429 ||
+    status === 502 ||
+    status === 503
   );
 }
 

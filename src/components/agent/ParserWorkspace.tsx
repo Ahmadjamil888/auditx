@@ -110,9 +110,10 @@ interface ProviderError {
 
 // ── Classify API error message ────────────────────────────────────────────────
 
-function classifyError(msg: string): "quota" | "rate_limit" | "timeout" | "provider" | "generic" {
+function classifyError(msg: string): "quota" | "credits" | "rate_limit" | "timeout" | "provider" | "generic" {
   const m = msg.toLowerCase();
   if (m.includes("quota_exceeded") || m.includes("quota exceeded") || m.includes("daily limit") || m.includes("429")) return "quota";
+  if (m.includes("402") || m.includes("requires more credits") || m.includes("credits") || m.includes("upgrade to a paid")) return "credits";
   if (m.includes("rate limit") || m.includes("rate-limit") || m.includes("temporarily busy")) return "rate_limit";
   if (m.includes("504") || m.includes("timeout") || m.includes("timed out") || m.includes("taking longer")) return "timeout";
   if (m.includes("502") || m.includes("503") || m.includes("upstream") || m.includes("provider") || m.includes("overloaded")) return "provider";
@@ -205,6 +206,16 @@ function ErrorBanner({
           : message,
       cta: plan === "free" ? "Upgrade to Pro" : null,
       ctaLink: "/app/billing",
+    },
+    credits: {
+      icon: Zap,
+      color: "var(--warn)",
+      bg: "rgba(201,138,26,0.06)",
+      border: "rgba(201,138,26,0.2)",
+      title: "AI service needs more credits",
+      body: "The AI provider ran out of free credits for this request. This is a temporary limit — try again in a few minutes or ask a simpler question.",
+      cta: "Try again",
+      ctaLink: null,
     },
     rate_limit: {
       icon: Clock,

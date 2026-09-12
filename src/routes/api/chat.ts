@@ -377,6 +377,7 @@ export const Route = createFileRoute("/api/chat")({
                 try {
                   const { text: findings } = await generateText({
                     model: cascadeModel,
+                    maxOutputTokens: 1000,
                     system: `${SPECIALISTS[agent]}\n\nReturn compact markdown: findings, figures, evidence references, and a confidence rating (high/medium/low). Never expose hidden reasoning.`,
                     prompt: `Objective:\n${objective}\n\nData and context:\n${context.slice(0, 40000)}`,
                   });
@@ -814,6 +815,7 @@ Rules for the final answer:
           },
           experimental_toolApprovalSecret: approvalSecret,
           stopWhen: stepCountIs(50),
+          maxOutputTokens: 2000,
         });
 
         return result.toUIMessageStreamResponse({

@@ -120,7 +120,6 @@ const STREAM_MODELS = [
   "mistralai/mistral-7b-instruct:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "inclusionai/ling-3.0-flash-fin:free",
-  "openrouter/free",
 ] as const;
 
 async function streamWithCascade(
