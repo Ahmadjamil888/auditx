@@ -257,7 +257,7 @@ export const Route = createFileRoute("/api/chat")({
           .single();
         if (threadError || !thread) return new Response("Thread not found", { status: 404 });
 
-        // ── Quota check ───────────────────────────────────────────────────────
+        // ── Quota check (graceful — ai_usage table may not exist yet) ────────
         const DAILY_LIMITS: Record<string, number> = { free: 20, pro: 100, enterprise: 500 };
 
         const { data: subData } = await supabase
@@ -268,15 +268,20 @@ export const Route = createFileRoute("/api/chat")({
         const plan = (subData?.plan as string | undefined) ?? "free";
         const dailyLimit = DAILY_LIMITS[plan] ?? DAILY_LIMITS["free"]!;
 
-        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: usageRows } = await supabase
-          .from("ai_usage")
-          .select("credits_used")
-          .eq("user_id", authData.user.id)
-          .eq("status", "ok")
-          .gte("created_at", since24h);
-
-        const creditsUsedToday = (usageRows ?? []).reduce((s, r) => s + (r.credits_used ?? 0), 0);
+        let creditsUsedToday = 0;
+        try {
+          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const { data: usageRows } = await supabase
+            .from("ai_usage")
+            .select("credits_used")
+            .eq("user_id", authData.user.id)
+            .eq("status", "ok")
+            .gte("created_at", since24h);
+          creditsUsedToday = (usageRows ?? []).reduce((s, r) => s + (r.credits_used ?? 0), 0);
+        } catch {
+          // Table not migrated yet — skip quota check, don't block the request
+          console.warn("[AuditX] ai_usage table not available yet; skipping quota check.");
+        }
 
         if (creditsUsedToday >= dailyLimit) {
           const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -290,9 +295,9 @@ export const Route = createFileRoute("/api/chat")({
           );
         }
 
-        // Track this request (record created before streaming; update on finish)
+        // Track this request — fire-and-forget, never block the stream
         const usageId = crypto.randomUUID();
-        await supabase.from("ai_usage").insert({
+        supabase.from("ai_usage").insert({
           id:                 usageId,
           user_id:            authData.user.id,
           org_id:             thread.org_id,
@@ -302,7 +307,10 @@ export const Route = createFileRoute("/api/chat")({
           inference_requests: 1,
           credits_used:       1,
           status:             "ok",
-        } as never);
+        } as never).then(
+          () => undefined,
+          (err: unknown) => console.warn("[AuditX] ai_usage insert failed (table may not exist yet):", err),
+        );
 
         const audit = async (action: string, entityId: string, payload: Record<string, unknown>) => {
           const encoded = new TextEncoder().encode(`${Date.now()}-${action}-${entityId}-${authData.user.id}`);

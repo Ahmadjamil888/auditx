@@ -957,6 +957,24 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
       new DefaultChatTransport({
         api: "/api/chat",
         headers: () => ({ Authorization: `Bearer ${session?.access_token ?? ""}` }),
+        // Intercept non-2xx responses and surface the actual error body
+        // before the AI SDK replaces it with the generic "An error occurred."
+        fetch: async (input, init) => {
+          const res = await fetch(input, init);
+          if (!res.ok) {
+            // Clone so we can read the body without consuming the original
+            const clone = res.clone();
+            let message = `HTTP ${res.status}`;
+            try {
+              const body = (await clone.json()) as { message?: string; code?: string };
+              if (body.message) message = body.message;
+            } catch {
+              try { message = await clone.text(); } catch { /* use status */ }
+            }
+            throw new Error(message);
+          }
+          return res;
+        },
       }),
     [session?.access_token],
   );
