@@ -308,8 +308,12 @@ export interface Database {
           org_id: string;
           user_id: string;
           type: string;
+          title: string;
           message: string;
+          severity: string;
           read: boolean;
+          link: string | null;
+          metadata: Json | null;
           created_at: string;
         };
         Insert: {
@@ -317,8 +321,12 @@ export interface Database {
           org_id: string;
           user_id: string;
           type: string;
+          title?: string;
           message: string;
+          severity?: string;
           read?: boolean;
+          link?: string | null;
+          metadata?: Json | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;

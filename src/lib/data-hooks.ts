@@ -221,8 +221,11 @@ export function useSubscription(orgId: string | undefined) {
 export interface AppNotification {
   id: string;
   type: string;
+  title: string;
   message: string;
+  severity: string;
   read: boolean;
+  link: string | null;
   created_at: string;
 }
 
@@ -233,14 +236,14 @@ export function useNotifications(userId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notifications")
-        .select("id, type, message, read, created_at")
+        .select("id, type, title, message, severity, read, link, created_at")
         .eq("user_id", userId!)
         .order("created_at", { ascending: false })
         .limit(30);
       if (error) throw new Error(error.message);
       return (data ?? []) as AppNotification[];
     },
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
     staleTime: 15_000,
   });
 }
@@ -263,11 +266,22 @@ export async function pushNotification(input: {
   orgId: string;
   userId: string;
   type: string;
+  title: string;
   message: string;
+  severity?: string;
+  link?: string;
 }) {
   await supabase
     .from("notifications")
-    .insert({ org_id: input.orgId, user_id: input.userId, type: input.type, message: input.message })
+    .insert({
+      org_id: input.orgId,
+      user_id: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      severity: input.severity ?? "info",
+      link: input.link ?? null,
+    })
     .then(() => undefined, () => undefined);
 }
 

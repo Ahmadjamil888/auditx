@@ -21,7 +21,7 @@
 //   • Optional headers: HTTP-Referer, X-Title (for rankings / attribution)
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { LanguageModelV1 } from "ai";
+import type { LanguageModel as LanguageModelV1 } from "ai";
 
 // ── OpenRouter base URL ───────────────────────────────────────────────────────
 

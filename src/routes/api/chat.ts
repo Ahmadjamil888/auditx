@@ -585,6 +585,43 @@ export const Route = createFileRoute("/api/chat")({
               };
             },
           }),
+          // ── create_notification: agent can push a real in-app notification ──
+          create_notification: tool({
+            description: "Send a persistent in-app notification to the user. Use after completing a significant task, finding anomalies, or needing to alert the user. Always include a meaningful title and message.",
+            inputSchema: z.object({
+              type: z.string().describe("Notification type: task_complete | approval_required | anomaly | error | info"),
+              title: z.string().describe("Short title, max 60 chars"),
+              message: z.string().describe("Full message body, 1-2 sentences"),
+              severity: z.enum(["info", "success", "warning", "error"]).default("info"),
+              link: z.string().nullable().describe("Optional app route to link to, e.g. /app/ledger"),
+            }),
+            execute: async ({ type, title, message, severity, link }) => {
+              await supabase.from("notifications").insert({
+                org_id: thread.org_id,
+                user_id: authData.user.id,
+                type,
+                title,
+                message,
+                severity,
+                link: link ?? null,
+              });
+              return { sent: true, title, type };
+            },
+          }),
+          // ── get_broker_accounts: read broker accounts ─────────────────────
+          get_broker_accounts: tool({
+            description: "Read the user's connected broker accounts.",
+            inputSchema: z.object({}),
+            execute: async () => {
+              const { data, error } = await supabase
+                .from("broker_accounts")
+                .select("id,name,broker_name,currency,exchange,external_ref,created_at")
+                .eq("org_id", thread.org_id)
+                .order("created_at", { ascending: false });
+              if (error) throw new Error(error.message);
+              return data ?? [];
+            },
+          }),
         };
 
         const uiMessages = body.messages as UIMessage[];
@@ -629,6 +666,9 @@ When the user asks for a spreadsheet/CSV:
 - kind="custom"     → custom headers + rows you supply
 Always tell the user the file will download automatically.
 
+━━ NOTIFICATIONS ━━
+After completing a significant task (multi-step analysis, saving a report, detecting anomalies), call create_notification to alert the user with a clear title, message, severity and relevant link. Always notify on: task completion, approval required, anomalies found, errors encountered.
+
 ━━ WRITES REQUIRE APPROVAL ━━
 insert_transaction, update_transaction, delete_transaction, flag_anomaly, resolve_flag all require explicit user approval. Propose clearly; never claim success until the tool result confirms it.
 
@@ -667,7 +707,27 @@ Rules for the final answer:
         return result.toUIMessageStreamResponse({
           originalMessages: uiMessages,
           onFinish: async ({ messages }) => {
-            const { error: messageError } = await supabase.from("chat_messages").upsert(messages.map((message, index) => ({ thread_id: thread.id, org_id: thread.org_id, user_id: authData.user.id, ai_message_id: message.id, role: message.role, parts: message.parts as never, position: index })), { onConflict: "thread_id,ai_message_id" });
+            // Deduplicate by ai_message_id — keep the last occurrence of each
+            // (the full message array re-sends history on every turn, so the
+            // same id can appear twice and cause a Postgres 21000 conflict).
+            const seen = new Map<string, typeof messages[number] & { position: number }>();
+            messages.forEach((message, index) => {
+              seen.set(message.id, { ...message, position: index });
+            });
+            const deduped = Array.from(seen.values());
+
+            const { error: messageError } = await supabase.from("chat_messages").upsert(
+              deduped.map((message) => ({
+                thread_id:    thread.id,
+                org_id:       thread.org_id,
+                user_id:      authData.user.id,
+                ai_message_id: message.id,
+                role:         message.role,
+                parts:        message.parts as never,
+                position:     message.position,
+              })),
+              { onConflict: "thread_id,ai_message_id" },
+            );
             if (messageError) console.error("[AuditX] Message persistence failed", messageError);
             const { error: updateError } = await supabase.from("chat_threads").update({ title, updated_at: new Date().toISOString() }).eq("id", thread.id).eq("user_id", authData.user.id);
             if (updateError) console.error("[AuditX] Thread update failed", updateError);

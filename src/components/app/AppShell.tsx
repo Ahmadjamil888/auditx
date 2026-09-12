@@ -2,7 +2,6 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3,
-  Bell,
   BookOpen,
   ChevronDown,
   CreditCard,
@@ -24,7 +23,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Logo, LogoMark } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
 import { CommandBarProvider, useCommandBar } from "@/components/intelligence/AuditXCommandBar";
-import { useNotifications } from "@/lib/data-hooks";
+import { NotificationBell, NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 // ── Persist sidebar state across page loads ───────────────────────────────────
 const SIDEBAR_KEY = "auditx.sidebar.expanded";
@@ -100,20 +99,6 @@ function NavItem({
   );
 }
 
-// ── Notification dot ──────────────────────────────────────────────────────────
-
-function NotificationDot({ userId }: { userId: string | undefined }) {
-  const { data: notifications = [] } = useNotifications(userId);
-  const unread = notifications.filter((n) => !n.read).length;
-  if (!unread) return null;
-  return (
-    <span
-      className="absolute right-1.5 top-1.5 size-2 rounded-full"
-      style={{ background: "var(--bad)" }}
-    />
-  );
-}
-
 // ── InnerShell ────────────────────────────────────────────────────────────────
 
 function InnerShell({ children }: { children: ReactNode }) {
@@ -127,6 +112,7 @@ function InnerShell({ children }: { children: ReactNode }) {
   const [expanded,     setExpanded]     = useState(() => readSidebarPref());
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notifOpen,    setNotifOpen]    = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Persist preference
@@ -469,15 +455,8 @@ function InnerShell({ children }: { children: ReactNode }) {
 
             {/* Notification bell */}
             <div className="relative">
-              <button
-                type="button"
-                className="relative flex size-9 items-center justify-center rounded-xl border transition-colors hover:bg-black/5"
-                style={{ borderColor: "var(--hairline)" }}
-                aria-label="Notifications"
-              >
-                <Bell size={18} strokeWidth={1.75} />
-                <NotificationDot userId={user?.id} />
-              </button>
+              <NotificationBell userId={user?.id} onClick={() => setNotifOpen(true)} />
+              <NotificationCenter open={notifOpen} onClose={() => setNotifOpen(false)} />
             </div>
           </div>
         </header>
