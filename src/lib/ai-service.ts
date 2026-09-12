@@ -1,13 +1,17 @@
 // ─── AuditX AI Service — Agentic pipeline on OpenRouter ─────────────────────
 //
 // MODEL CASCADE (free tier models on OpenRouter):
-//   1. nvidia/nemotron-3-ultra-550b-a55b:free  → primary (1M context, top reasoning)
-//   2. inclusionai/ling-3.0-flash-fin:free     → fallback (finance-focused free model)
-//   3. openrouter/free                         → last resort (auto-selected free model)
+//   1. deepseek/deepseek-r1-0528:free          → primary (strong reasoning)
+//   2. deepseek/deepseek-chat-v3-0324:free     → fast, good tool use
+//   3. meta-llama/llama-3.3-70b-instruct:free  → reliable, broadly available
+//   4. mistralai/mistral-7b-instruct:free      → lightweight, rarely overloaded
+//   5. nvidia/nemotron-3-ultra-550b-a55b:free  → great but often overloaded
+//   6. inclusionai/ling-3.0-flash-fin:free     → finance-focused fallback
+//   7. openrouter/free                         → last resort (auto-selected)
 //
 // AGENTIC ARCHITECTURE:
-//   • Retry-with-exponential-backoff on quota errors (429 / rate-limit)
-//   • Model cascade: if primary quota exhausted, promotes to fallback
+//   • Retry-with-exponential-backoff on quota / provider errors (429/502/503)
+//   • Model cascade: if current model is overloaded, promotes to next
 //   • Per-task specialised system prompts (parse / anomaly / tax / portfolio)
 //   • safeParseJSON strips accidental markdown fences from model output
 
@@ -16,10 +20,14 @@
 // ── Model registry ─────────────────────────────────────────────────────────────
 
 const MODELS = {
-  /** Primary: top free-tier model, 1M context, strong reasoning */
-  PRIMARY:  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  /** Fallback: finance-focused free model */
-  FALLBACK: "inclusionai/ling-3.0-flash-fin:free",
+  /** Primary: DeepSeek R1 — strong reasoning, rarely rate-limited */
+  PRIMARY:  "deepseek/deepseek-r1-0528:free",
+  /** Secondary: DeepSeek Chat — fast, good tool use */
+  SECONDARY: "deepseek/deepseek-chat-v3-0324:free",
+  /** Tertiary: Llama 3.3 70B — broadly available */
+  TERTIARY: "meta-llama/llama-3.3-70b-instruct:free",
+  /** Fallback: Mistral 7B — lightweight, rarely overloaded */
+  FALLBACK: "mistralai/mistral-7b-instruct:free",
   /** Last resort: OpenRouter auto-selects any available free model */
   AUTO:     "openrouter/free",
 } as const;
@@ -118,11 +126,22 @@ async function openRouterChat(
 
 function isQuotaError(e: unknown): boolean {
   const msg = String((e as Error)?.message ?? "").toLowerCase();
+  const code = (e as { code?: number | string })?.code;
   return (
     msg.includes("429") ||
+    msg.includes("502") ||
+    msg.includes("503") ||
     msg.includes("quota") ||
     msg.includes("resource_exhausted") ||
-    msg.includes("rate limit")
+    msg.includes("rate limit") ||
+    msg.includes("rate-limit") ||
+    msg.includes("overloaded") ||
+    msg.includes("temporarily unavailable") ||
+    msg.includes("upstream error") ||
+    msg.includes("provider_unavailable") ||
+    code === 429 ||
+    code === 502 ||
+    code === 503
   );
 }
 
@@ -175,7 +194,7 @@ interface RunOptions {
 }
 
 async function runWithCascade(opts: RunOptions): Promise<string> {
-  const cascade: ModelKey[] = ["PRIMARY", "FALLBACK", "AUTO"];
+  const cascade: ModelKey[] = ["PRIMARY", "SECONDARY", "TERTIARY", "FALLBACK", "AUTO"];
 
   for (const modelKey of cascade) {
     const model = MODELS[modelKey];

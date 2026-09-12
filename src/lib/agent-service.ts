@@ -114,9 +114,13 @@ function getApiKey(): string {
 // ── Streaming cascade: primary → fallback ─────────────────────────────────────
 
 const STREAM_MODELS = [
-  "nvidia/nemotron-3-ultra-550b-a55b:free",  // primary — 1M context, top reasoning
-  "inclusionai/ling-3.0-flash-fin:free",     // fallback — finance-focused free model
-  "openrouter/free",                          // last resort — auto-selected free model
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "inclusionai/ling-3.0-flash-fin:free",
+  "openrouter/free",
 ] as const;
 
 async function streamWithCascade(
@@ -161,8 +165,8 @@ async function streamWithCascade(
       if (!resp.ok) {
         const errText = await resp.text().catch(() => resp.statusText);
         const err = new Error(`OpenRouter ${resp.status}: ${errText}`);
-        if (resp.status === 429 && i < STREAM_MODELS.length - 1) {
-          console.warn(`[AuditX agent] Quota on ${model}, trying ${STREAM_MODELS[i + 1]}…`);
+        if ((resp.status === 429 || resp.status === 502 || resp.status === 503) && i < STREAM_MODELS.length - 1) {
+          console.warn(`[AuditX agent] Provider error ${resp.status} on ${model}, trying ${STREAM_MODELS[i + 1]}…`);
           continue;
         }
         throw err;
@@ -195,7 +199,7 @@ async function streamWithCascade(
       return full;
     } catch (e) {
       const msg = String((e as Error)?.message ?? "").toLowerCase();
-      const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("rate limit");
+      const isQuota = msg.includes("429") || msg.includes("502") || msg.includes("503") || msg.includes("quota") || msg.includes("rate limit") || msg.includes("rate-limit") || msg.includes("overloaded") || msg.includes("upstream error") || msg.includes("provider_unavailable");
       if (isQuota && i < STREAM_MODELS.length - 1) {
         console.warn(`[AuditX agent] Quota on ${model}, trying ${STREAM_MODELS[i + 1]}…`);
         continue;

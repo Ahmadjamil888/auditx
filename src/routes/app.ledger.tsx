@@ -760,6 +760,14 @@ function ImportPanel({
 
       const results: (TransactionInput & { _raw?: string })[] = [];
 
+      const IMPORT_MODELS = [
+        "deepseek/deepseek-r1-0528:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "openrouter/free",
+      ];
+
       for (const file of files) {
         const isText =
           file.type.includes("text") ||
@@ -785,27 +793,44 @@ function ImportPanel({
           ? `Extract ALL transactions from this financial document as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange. Return ONLY a JSON array.\n\n${content.slice(0, 30000)}`
           : `Extract ALL transactions from this broker statement image/PDF as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange. Return ONLY a JSON array. Image base64: data:${file.type};base64,${content.slice(0, 5000)}`;
 
-        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://auditx-beta.vercel.app",
-            "X-Title": "AuditX Import",
-          },
-          body: JSON.stringify({
-            model: "nvidia/nemotron-3-ultra-550b-a55b:free",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0,
-          }),
-        });
+        let raw = "[]";
+        let lastParseErr: Error | null = null;
+        for (const modelId of IMPORT_MODELS) {
+          try {
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://auditx-beta.vercel.app",
+                "X-Title": "AuditX Import",
+              },
+              body: JSON.stringify({
+                model: modelId,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0,
+              }),
+            });
 
-        if (!res.ok) throw new Error(`AI parsing failed (${res.status})`);
+            if (res.status === 429 || res.status === 502 || res.status === 503) {
+              console.warn(`[AuditX import] Provider error ${res.status} on ${modelId}, trying next…`);
+              continue;
+            }
+            if (!res.ok) throw new Error(`AI parsing failed (${res.status})`);
 
-        const json = (await res.json()) as {
-          choices?: { message?: { content?: string } }[];
-        };
-        const raw = json.choices?.[0]?.message?.content ?? "[]";
+            const json = (await res.json()) as {
+              choices?: { message?: { content?: string } }[];
+            };
+            raw = json.choices?.[0]?.message?.content ?? "[]";
+            lastParseErr = null;
+            break;
+          } catch (err) {
+            lastParseErr = err instanceof Error ? err : new Error(String(err));
+            console.warn(`[AuditX import] Error on ${modelId}:`, lastParseErr.message);
+          }
+        }
+
+        if (lastParseErr) throw lastParseErr;
 
         // Strip markdown fences
         const clean = raw.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();

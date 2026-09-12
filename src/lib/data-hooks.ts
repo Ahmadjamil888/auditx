@@ -356,6 +356,83 @@ export function useDeleteOrganization() {
   });
 }
 
+// ── Chat threads ──────────────────────────────────────────────────────────────
+
+export function useChatThreads(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["chat_threads", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("chat_threads")
+        .select("id, title, created_at, updated_at")
+        .eq("user_id", userId!)
+        .order("updated_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    staleTime: 10_000,
+  });
+}
+
+export function useDeleteChatThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ threadId, userId }: { threadId: string; userId: string }) => {
+      // Delete messages first (foreign key), then the thread
+      const { error: msgErr } = await supabase
+        .from("chat_messages")
+        .delete()
+        .eq("thread_id", threadId);
+      if (msgErr) throw new Error(msgErr.message);
+
+      const { error: threadErr } = await supabase
+        .from("chat_threads")
+        .delete()
+        .eq("id", threadId)
+        .eq("user_id", userId);
+      if (threadErr) throw new Error(threadErr.message);
+    },
+    onSuccess: (_d, { userId }) =>
+      qc.invalidateQueries({ queryKey: ["chat_threads", userId] }),
+  });
+}
+
+// ── AI usage (quota tracking) ─────────────────────────────────────────────────
+
+export interface AiUsageToday {
+  credits_used_today: number;
+  requests_today: number;
+}
+
+/** AuditX plan daily credit limits (mirrors ai_plan_limits table). */
+export const AI_PLAN_DAILY_LIMITS: Record<string, number> = {
+  free: 20,
+  pro: 100,
+  enterprise: 500,
+};
+
+export function useAiUsageToday(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["ai_usage_today", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("ai_usage")
+        .select("credits_used")
+        .eq("user_id", userId!)
+        .eq("status", "ok")
+        .gte("created_at", since);
+      if (error) return { credits_used_today: 0, requests_today: 0 } as AiUsageToday;
+      const credits_used_today = (data ?? []).reduce((s, r) => s + (r.credits_used ?? 0), 0);
+      return { credits_used_today, requests_today: data?.length ?? 0 } as AiUsageToday;
+    },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
+
 // ── Universal file import ─────────────────────────────────────────────────────
 
 export function useUniversalImport() {

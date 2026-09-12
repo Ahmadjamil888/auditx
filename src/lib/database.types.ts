@@ -400,6 +400,36 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["financial_insights"]["Insert"]>;
         Relationships: [];
       };
+      ai_usage: {
+        Row: {
+          id: string;
+          user_id: string;
+          org_id: string;
+          plan: string;
+          thread_id: string | null;
+          model: string;
+          inference_requests: number;
+          credits_used: number;
+          status: string;
+          provider_error: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          org_id: string;
+          plan?: string;
+          thread_id?: string | null;
+          model?: string;
+          inference_requests?: number;
+          credits_used?: number;
+          status?: string;
+          provider_error?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_usage"]["Insert"]>;
+        Relationships: [];
+      };
       financial_investigations: {
         Row: {
           id: string;

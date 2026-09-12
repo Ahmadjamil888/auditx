@@ -162,6 +162,50 @@ function missingFields(row: {
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
+      // ── DELETE /api/chat?threadId=xxx — clear a chat thread ──────────────
+      DELETE: async ({ request }) => {
+        const authorization = request.headers.get("authorization") ?? "";
+        if (!authorization.startsWith("Bearer ")) return new Response("Unauthorized", { status: 401 });
+
+        const url2 = new URL(request.url);
+        const threadId = url2.searchParams.get("threadId");
+        if (!threadId) return new Response("threadId is required", { status: 400 });
+
+        const supabaseUrl = process.env["SUPABASE_URL"] ?? (import.meta.env["VITE_SUPABASE_URL"] as string | undefined);
+        const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? (import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined);
+        if (!supabaseUrl || !supabaseKey) return new Response("Database configuration is missing", { status: 500 });
+
+        const db = createClient<Database>(supabaseUrl, supabaseKey, {
+          global: { headers: { Authorization: authorization } },
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const { data: authData, error: authError } = await db.auth.getUser();
+        if (authError || !authData.user) return new Response("Unauthorized", { status: 401 });
+
+        // Verify ownership
+        const { data: thread } = await db
+          .from("chat_threads")
+          .select("id")
+          .eq("id", threadId)
+          .eq("user_id", authData.user.id)
+          .maybeSingle();
+        if (!thread) return new Response("Thread not found", { status: 404 });
+
+        // Delete messages first (FK), then thread
+        await db.from("chat_messages").delete().eq("thread_id", threadId);
+        const { error: delErr } = await db
+          .from("chat_threads")
+          .delete()
+          .eq("id", threadId)
+          .eq("user_id", authData.user.id);
+        if (delErr) return new Response(delErr.message, { status: 500 });
+
+        return new Response(JSON.stringify({ deleted: true, threadId }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+
       POST: async ({ request }) => {
         const authorization = request.headers.get("authorization") ?? "";
         if (!authorization.startsWith("Bearer ")) return new Response("Unauthorized", { status: 401 });
@@ -180,8 +224,10 @@ export const Route = createFileRoute("/api/chat")({
 
         const resolved = await resolveAgentModel();
         if (!resolved) {
-          const key404Msg = "AI is not configured — add OPENROUTER_API_KEY to your environment variables.";
-          return new Response(key404Msg, { status: 500 });
+          return new Response(
+            JSON.stringify({ code: "ai_not_configured", message: "AI is not configured — add OPENROUTER_API_KEY to your environment variables." }),
+            { status: 500, headers: { "Content-Type": "application/json" } },
+          );
         }
         const model = resolved.model;
 
@@ -199,6 +245,53 @@ export const Route = createFileRoute("/api/chat")({
           .eq("user_id", authData.user.id)
           .single();
         if (threadError || !thread) return new Response("Thread not found", { status: 404 });
+
+        // ── Quota check ───────────────────────────────────────────────────────
+        const DAILY_LIMITS: Record<string, number> = { free: 20, pro: 100, enterprise: 500 };
+
+        const { data: subData } = await supabase
+          .from("subscriptions")
+          .select("plan")
+          .eq("org_id", thread.org_id)
+          .maybeSingle();
+        const plan = (subData?.plan as string | undefined) ?? "free";
+        const dailyLimit = DAILY_LIMITS[plan] ?? DAILY_LIMITS["free"]!;
+
+        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: usageRows } = await supabase
+          .from("ai_usage")
+          .select("credits_used")
+          .eq("user_id", authData.user.id)
+          .eq("status", "ok")
+          .gte("created_at", since24h);
+
+        const creditsUsedToday = (usageRows ?? []).reduce((s, r) => s + (r.credits_used ?? 0), 0);
+
+        if (creditsUsedToday >= dailyLimit) {
+          const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+          const msg =
+            plan === "free"
+              ? `You've reached today's AI limit. Your Free plan includes ${dailyLimit} AI requests per day. Your limit will reset in the next 24 hours.`
+              : `You've used all ${dailyLimit} AI credits available today on your ${planLabel} plan. Your limit resets in 24 hours.`;
+          return new Response(
+            JSON.stringify({ code: "quota_exceeded", plan, daily_limit: dailyLimit, credits_used: creditsUsedToday, message: msg }),
+            { status: 429, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        // Track this request (record created before streaming; update on finish)
+        const usageId = crypto.randomUUID();
+        await supabase.from("ai_usage").insert({
+          id:                 usageId,
+          user_id:            authData.user.id,
+          org_id:             thread.org_id,
+          plan,
+          thread_id:          thread.id,
+          model:              resolved.modelId,
+          inference_requests: 1,
+          credits_used:       1,
+          status:             "ok",
+        } as never);
 
         const audit = async (action: string, entityId: string, payload: Record<string, unknown>) => {
           const encoded = new TextEncoder().encode(`${Date.now()}-${action}-${entityId}-${authData.user.id}`);

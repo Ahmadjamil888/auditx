@@ -3,15 +3,23 @@
 // Server-side agent uses audit-agent.server.ts instead.
 //
 // The env var exposed to the browser is VITE_OPENROUTER_API_KEY.
-// Free models with strong reasoning and streaming support:
-//   Primary  : nvidia/nemotron-3-ultra-550b-a55b:free  (1M context, top free)
-//   Fallback : inclusionai/ling-3.0-flash-fin:free     (finance-focused free)
-//   Auto     : openrouter/free                         (always works)
+// Free model cascade (skips overloaded providers automatically):
+//   1. deepseek/deepseek-r1-0528:free          — strong reasoning
+//   2. deepseek/deepseek-chat-v3-0324:free     — fast, good tool use
+//   3. meta-llama/llama-3.3-70b-instruct:free  — reliable, broadly available
+//   4. mistralai/mistral-7b-instruct:free      — lightweight, rarely overloaded
+//   5. nvidia/nemotron-3-ultra-550b-a55b:free  — great but often overloaded
+//   6. inclusionai/ling-3.0-flash-fin:free     — finance-focused fallback
+//   7. openrouter/free                         — always works (auto-selected)
 
 const BASE = "https://openrouter.ai/api/v1";
 
 // Free model cascade for client-side streaming
 const CLIENT_MODELS = [
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "inclusionai/ling-3.0-flash-fin:free",
   "openrouter/free",
@@ -31,7 +39,7 @@ function isKeyMissing(): boolean {
 }
 
 function isQuota(status: number): boolean {
-  return status === 429 || status === 503;
+  return status === 429 || status === 502 || status === 503;
 }
 
 /** Stream a completion from OpenRouter, yielding text deltas. */

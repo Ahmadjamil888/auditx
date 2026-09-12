@@ -1,40 +1,48 @@
 // ─── AuditX AI Provider — OpenRouter (primary) ───────────────────────────────
 //
-// OpenRouter is the primary provider. It exposes an OpenAI-compatible endpoint
-// at https://openrouter.ai/api/v1 and supports 400+ models through a single key.
+// OpenRouter exposes an OpenAI-compatible endpoint at https://openrouter.ai/api/v1
+// and supports 400+ models through a single API key.
 //
 // MODEL STRATEGY (free-only, tool-calling capable):
-//   PRIMARY   : nvidia/nemotron-3-ultra-550b-a55b:free — top free model, 1M context
-//   FALLBACK 1: inclusionai/ling-3.0-flash-fin:free   — finance-focused free model
-//   FALLBACK 2: openrouter/free                       — OpenRouter auto-selects any free
-//                                              model that supports tool calling
-//
-// The resolver cascades through the list, skipping any model that returns a
-// quota / rate-limit error (429, 503) so the agent always gets a working model.
+//   Cascade through FREE_MODELS in order. Skip any model that returns a
+//   quota, rate-limit, or upstream provider error (429 / 502 / 503).
+//   resolveAgentModel() probes each model with a minimal test call and
+//   returns the first one that responds successfully — so a temporarily
+//   overloaded provider (e.g. Nvidia 502) is automatically skipped.
 //
 // OPENROUTER DOCS: https://openrouter.ai/docs
 //   • All models accept the OpenAI chat completions schema
 //   • Tool calling is supported and normalised across providers
 //   • ":free" suffix = zero-cost tier of that model
-//   • "openrouter/free" = auto-selected free model with feature-aware routing
 //   • Required headers: Authorization: Bearer <key>
-//   • Optional headers: HTTP-Referer, X-Title (for rankings / attribution)
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText } from "ai";
 import type { LanguageModel as LanguageModelV1 } from "ai";
 
 // ── OpenRouter base URL ───────────────────────────────────────────────────────
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
-// ── Free models cascade (best-first, all support tool calling) ───────────────
-// Each ":free" model is the zero-cost tier; they share rate limits but are
-// genuinely free with no per-token charges.
+// ── Free models cascade (all support tool calling) ───────────────────────────
+// Listed best-first. resolveAgentModel() will skip any that are overloaded.
+//
+//  1. deepseek/deepseek-r1-0528:free        — strong reasoning, large context
+//  2. deepseek/deepseek-chat-v3-0324:free   — fast chat, good tool use
+//  3. meta-llama/llama-3.3-70b-instruct:free — reliable, broadly available
+//  4. mistralai/mistral-7b-instruct:free    — lightweight, rarely overloaded
+//  5. nvidia/nemotron-3-ultra-550b-a55b:free — great but often overloaded
+//  6. inclusionai/ling-3.0-flash-fin:free   — finance-focused fallback
+//  7. openrouter/auto                       — OpenRouter picks best available
 
 export const FREE_MODELS = [
-  "nvidia/nemotron-3-ultra-550b-a55b:free",  // Top free model: 1M context, strong reasoning
-  "inclusionai/ling-3.0-flash-fin:free",     // Finance-focused free model
-  "openrouter/free",                          // OpenRouter auto-router — picks best free
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "inclusionai/ling-3.0-flash-fin:free",
+  "openrouter/auto",
 ] as const;
 
 export type FreeModel = (typeof FREE_MODELS)[number];
@@ -46,30 +54,43 @@ export function createOpenRouterProvider(apiKey: string) {
     name: "openrouter",
     baseURL: OPENROUTER_BASE,
     headers: {
-      "Authorization":  `Bearer ${apiKey}`,
-      "HTTP-Referer":   "https://auditx-beta.vercel.app",
-      "X-Title":        "AuditX - AI Financial Audit",
-      // Tell OpenRouter we allow fallback so it can auto-failover on errors
+      "Authorization":             `Bearer ${apiKey}`,
+      "HTTP-Referer":              "https://auditx-beta.vercel.app",
+      "X-Title":                   "AuditX - AI Financial Audit",
       "X-OpenRouter-Allow-Fallback": "1",
     },
   });
 }
 
-// ── Health probe ──────────────────────────────────────────────────────────────
-// Quick lightweight check — fetch model listing with the key.
+// ── isProviderError ───────────────────────────────────────────────────────────
+// Returns true for any transient error that warrants trying the next model:
+// quota exhaustion, rate limits, upstream provider overload (502), and
+// temporary unavailability (503).
 
-async function isOpenRouterKeyHealthy(apiKey: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${OPENROUTER_BASE}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(8000),
-    });
-    // 401/403 = bad key, anything else (including 429) means the key works
-    return res.status !== 401 && res.status !== 403;
-  } catch {
-    return false;
-  }
+export function isProviderError(e: unknown): boolean {
+  const msg = String((e as Error)?.message ?? "").toLowerCase();
+  const code = (e as { code?: number | string })?.code;
+
+  return (
+    msg.includes("429") ||
+    msg.includes("502") ||
+    msg.includes("503") ||
+    msg.includes("quota") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("rate limit") ||
+    msg.includes("rate-limit") ||
+    msg.includes("overloaded") ||
+    msg.includes("temporarily unavailable") ||
+    msg.includes("upstream error") ||
+    msg.includes("provider_unavailable") ||
+    code === 429 ||
+    code === 502 ||
+    code === 503
+  );
 }
+
+// Keep the old name as an alias so existing callers in api/chat.ts don't break.
+export const isQuotaError = isProviderError;
 
 // ── Resolved model result ─────────────────────────────────────────────────────
 
@@ -79,10 +100,29 @@ export interface ResolvedModel {
   model:    LanguageModelV1;
 }
 
-// ── resolveAgentModel — exported for use in api/chat.ts ──────────────────────
-//
-// Returns the best available free OpenRouter model, or null if the key is
-// missing / invalid (so the caller can return a 500 with a clear message).
+// ── probeModel ───────────────────────────────────────────────────────────────
+// Send a minimal 1-token test call to verify the model is accepting requests.
+// Returns true if the model responded without a provider/quota error.
+
+async function probeModel(model: LanguageModelV1): Promise<boolean> {
+  try {
+    await generateText({
+      model,
+      prompt: "hi",
+      maxOutputTokens: 1,
+    });
+    return true;
+  } catch (e) {
+    if (isProviderError(e)) return false;
+    // Non-provider errors (auth, bad request, etc.) mean the key is broken —
+    // stop the cascade immediately by re-throwing.
+    throw e;
+  }
+}
+
+// ── resolveAgentModel ─────────────────────────────────────────────────────────
+// Walks FREE_MODELS in order, probing each one, and returns the first that
+// responds. Returns null only if the API key is missing/invalid.
 
 export async function resolveAgentModel(): Promise<ResolvedModel | null> {
   const apiKey = process.env["OPENROUTER_API_KEY"];
@@ -91,52 +131,71 @@ export async function resolveAgentModel(): Promise<ResolvedModel | null> {
     return null;
   }
 
-  const healthy = await isOpenRouterKeyHealthy(apiKey);
-  if (!healthy) {
+  // Quick key validity check (does not consume quota).
+  const keyOk = await isOpenRouterKeyHealthy(apiKey);
+  if (!keyOk) {
     console.error("[AuditX] OPENROUTER_API_KEY appears invalid (401/403).");
     return null;
   }
 
   const provider = createOpenRouterProvider(apiKey);
 
-  // Return the primary model — the Vercel AI SDK's streamText already handles
-  // per-request errors. If a model quota is hit mid-stream the chat API will
-  // cascade using the FREE_MODELS list via resolveWithFallback below.
-  const primaryModel = FREE_MODELS[0];
-  return {
-    provider: "openrouter",
-    modelId:  primaryModel,
-    model:    provider(primaryModel) as LanguageModelV1,
-  };
+  for (const modelId of FREE_MODELS) {
+    const model = provider(modelId) as LanguageModelV1;
+    console.log(`[AuditX] Probing model: ${modelId}`);
+    try {
+      const ok = await probeModel(model);
+      if (ok) {
+        console.log(`[AuditX] Using model: ${modelId}`);
+        return { provider: "openrouter", modelId, model };
+      }
+      console.warn(`[AuditX] Model unavailable, trying next: ${modelId}`);
+    } catch (e) {
+      // Non-transient error — key is broken, abort.
+      console.error("[AuditX] Fatal error during model probe:", e);
+      return null;
+    }
+  }
+
+  console.error("[AuditX] All models in cascade are unavailable.");
+  return null;
 }
 
-// ── resolveWithFallback — for specialist delegate_agent calls ─────────────────
-// Tries each free model in order; returns the first one that doesn't immediately
-// fail the lightweight probe. Used when the caller wants to pick a fallback model
-// for a sub-task without re-doing the full key health check.
+// ── isOpenRouterKeyHealthy ────────────────────────────────────────────────────
+// Fetch the model list endpoint — cheap, no quota consumed.
+// 401/403 = bad key. Anything else (429, 502…) = key is fine, provider busy.
 
-export function resolveModelFromKey(apiKey: string, modelId: FreeModel = FREE_MODELS[0]): LanguageModelV1 {
+async function isOpenRouterKeyHealthy(apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${OPENROUTER_BASE}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.status !== 401 && res.status !== 403;
+  } catch {
+    return false;
+  }
+}
+
+// ── resolveModelFromKey ───────────────────────────────────────────────────────
+// Synchronous helper: wraps a specific model ID without probing.
+// Used by delegate_agent sub-tasks that already have a fallback loop.
+
+export function resolveModelFromKey(
+  apiKey: string,
+  modelId: FreeModel = FREE_MODELS[0],
+): LanguageModelV1 {
   const provider = createOpenRouterProvider(apiKey);
   return provider(modelId) as LanguageModelV1;
 }
 
-// ── isQuotaError — helper for callers that catch streaming errors ─────────────
+// ── getModelCascade ───────────────────────────────────────────────────────────
+// Returns all models as an ordered list for callers that implement their own
+// retry loop (e.g. delegate_agent in api/chat.ts).
 
-export function isQuotaError(e: unknown): boolean {
-  const msg = String((e as Error)?.message ?? "").toLowerCase();
-  return (
-    msg.includes("429") ||
-    msg.includes("quota") ||
-    msg.includes("resource_exhausted") ||
-    msg.includes("rate limit") ||
-    msg.includes("rate-limit") ||
-    msg.includes("503")
-  );
-}
-
-// ── getModelCascade — ordered list for multi-attempt callers ─────────────────
-
-export function getModelCascade(apiKey: string): Array<{ id: FreeModel; model: LanguageModelV1 }> {
+export function getModelCascade(
+  apiKey: string,
+): Array<{ id: FreeModel; model: LanguageModelV1 }> {
   const provider = createOpenRouterProvider(apiKey);
   return FREE_MODELS.map((id) => ({ id, model: provider(id) as LanguageModelV1 }));
 }

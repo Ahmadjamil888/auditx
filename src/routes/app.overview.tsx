@@ -249,17 +249,25 @@ function MissionControl() {
   const tax = computeTax(transactions, { jurisdiction, filerStatus: "Filer", taxYear: "2025" });
   const unreconciledCount = transactions.filter((t) => t.status === "needs_review").length;
 
-  // Portfolio allocation from positions
-  const tickerMap: Record<string, number> = {};
-  for (const tx of transactions) {
-    if (tx.action === "BUY") tickerMap[tx.ticker] = (tickerMap[tx.ticker] ?? 0) + tx.quantity * tx.price;
-    if (tx.action === "SELL") tickerMap[tx.ticker] = (tickerMap[tx.ticker] ?? 0) - tx.quantity * tx.price;
+  // Portfolio allocation — use same avg-cost remaining-position logic as computePortfolioSummary
+  const positions: Record<string, { qty: number; avgCost: number }> = {};
+  for (const tx of [...transactions].sort((a, b) => a.trade_date.localeCompare(b.trade_date))) {
+    if (!positions[tx.ticker]) positions[tx.ticker] = { qty: 0, avgCost: 0 };
+    const p = positions[tx.ticker]!;
+    if (tx.action === "BUY") {
+      const totalCost = p.avgCost * p.qty + tx.price * tx.quantity;
+      p.qty += tx.quantity;
+      p.avgCost = p.qty > 0 ? totalCost / p.qty : 0;
+    } else if (tx.action === "SELL") {
+      p.qty = Math.max(0, p.qty - tx.quantity);
+    }
   }
-  const allocationData = Object.entries(tickerMap)
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
+  const allocationData = Object.entries(positions)
+    .filter(([, p]) => p.qty > 0)
+    .map(([name, p]) => ({ name, value: Math.round(p.qty * p.avgCost) }))
+    .sort((a, b) => b.value - a.value)
     .slice(0, 6)
-    .map(([name, value], i) => ({ name, value: Math.round(value), color: allocationColors[i] ?? "#ccc" }));
+    .map((d, i) => ({ ...d, color: allocationColors[i] ?? "#ccc" }));
 
   const totalPortfolioValue = allocationData.reduce((s, d) => s + d.value, 0);
 
