@@ -224,8 +224,19 @@ export const Route = createFileRoute("/api/chat")({
 
         const resolved = await resolveAgentModel();
         if (!resolved) {
+          // Key is missing or placeholder — tell the operator exactly what to do
+          console.error(
+            "[AuditX] resolveAgentModel returned null. " +
+            "Set OPENROUTER_API_KEY in Vercel → Project → Settings → Environment Variables " +
+            "(or VITE_OPENROUTER_API_KEY as a fallback for local dev).",
+          );
           return new Response(
-            JSON.stringify({ code: "ai_not_configured", message: "AI is not configured — add OPENROUTER_API_KEY to your environment variables." }),
+            JSON.stringify({
+              code: "ai_not_configured",
+              message:
+                "The AI service is not configured on this deployment. " +
+                "Set OPENROUTER_API_KEY in your Vercel environment variables and redeploy.",
+            }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
         }
