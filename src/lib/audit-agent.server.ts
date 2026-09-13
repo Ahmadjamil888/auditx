@@ -52,20 +52,20 @@ function resolveApiKey(): string | undefined {
 // ── Free models cascade (all support tool calling) ───────────────────────────
 // Listed best-first. delegate_agent tries each in order on quota/provider errors.
 // IMPORTANT: only ":free" suffix models are truly zero-cost on OpenRouter.
-// "openrouter/auto" can route to paid models and burn credits — don't use it.
+// Verify availability at https://openrouter.ai/models?q=:free
 //
-//  1. deepseek/deepseek-r1-0528:free         — strong reasoning, free tier
-//  2. deepseek/deepseek-chat-v3-0324:free    — fast, good tool use, free tier
-//  3. meta-llama/llama-3.3-70b-instruct:free — reliable, broadly available
-//  4. mistralai/mistral-7b-instruct:free     — lightweight, rarely overloaded
-//  5. nvidia/nemotron-3-ultra-550b-a55b:free — great but often overloaded
+//  1. meta-llama/llama-3.3-70b-instruct:free — reliable, broadly available
+//  2. mistralai/mistral-7b-instruct:free     — lightweight, very available
+//  3. google/gemma-3-27b-it:free             — capable, free tier
+//  4. deepseek/deepseek-chat-v3-0324:free    — fast, good tool use
+//  5. nvidia/nemotron-3-ultra-550b-a55b:free — strong but sometimes overloaded
 //  6. inclusionai/ling-3.0-flash-fin:free    — finance-focused fallback
 
 export const FREE_MODELS = [
-  "deepseek/deepseek-r1-0528:free",
-  "deepseek/deepseek-chat-v3-0324:free",
   "meta-llama/llama-3.3-70b-instruct:free",
   "mistralai/mistral-7b-instruct:free",
+  "google/gemma-3-27b-it:free",
+  "deepseek/deepseek-chat-v3-0324:free",
   "nvidia/nemotron-3-ultra-550b-a55b:free",
   "inclusionai/ling-3.0-flash-fin:free",
 ] as const;
@@ -93,6 +93,8 @@ export interface ResolvedModel {
   provider: "openrouter";
   modelId:  FreeModel;
   model:    LanguageModelV1;
+  /** Full ordered cascade — the POST handler should try these in order */
+  cascade:  Array<{ id: FreeModel; model: LanguageModelV1 }>;
 }
 
 // ── resolveAgentModel ─────────────────────────────────────────────────────────
@@ -112,12 +114,14 @@ export async function resolveAgentModel(): Promise<ResolvedModel | null> {
   }
 
   const provider = createOpenRouterProvider(apiKey);
-  const primaryModel = FREE_MODELS[0]; // openrouter/auto — always available
+  const primaryModel = FREE_MODELS[0];
+  const cascade = FREE_MODELS.map((id) => ({ id, model: provider(id) as LanguageModelV1 }));
 
   return {
     provider: "openrouter",
     modelId:  primaryModel,
-    model:    provider(primaryModel) as LanguageModelV1,
+    model:    cascade[0]!.model,
+    cascade,
   };
 }
 

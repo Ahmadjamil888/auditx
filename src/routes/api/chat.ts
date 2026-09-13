@@ -742,9 +742,15 @@ export const Route = createFileRoute("/api/chat")({
         const latestText = latestUser?.parts.filter((part) => part.type === "text").map((part) => part.text).join(" ") ?? "";
         const title = text(latestText).slice(0, 64) || "Document audit";
 
-        const result = streamText({
-          model,
-          system: `You are AuditX, the Supervisor Orchestrator of an autonomous financial audit team serving PSX and NSE traders.
+        // ── Model cascade for the main orchestrator stream ────────────────────
+        // streamText itself doesn't retry — we must wrap it in a loop that
+        // tries the next free model whenever a provider/quota error is thrown
+        // during the initial connection (before any bytes are streamed).
+
+        const modelCascade = resolved.cascade;
+        const convertedMessages = await convertToModelMessages(uiMessages);
+
+        const SYSTEM_PROMPT = `You are AuditX, the Supervisor Orchestrator of an autonomous financial audit team serving PSX and NSE traders.
 
 ━━ HOW YOU WORK ━━
 1. Read the full conversation, all uploaded documents, the real ledger, and unfinished records before making any decision. Follow-ups build on earlier turns — never ask the user to repeat information you already have.
@@ -803,20 +809,80 @@ Rules for the final answer:
 - Mark every figure as verified (source: field name, reference ID, or document) or clearly labelled as an assumption.
 - Use markdown tables for financial figures.
 - Never reveal hidden chain-of-thought or internal agent communications.
-- Close with a one-line disclaimer that results are indicative and should be verified before filing.`,
-          messages: await convertToModelMessages(uiMessages),
+- Close with a one-line disclaimer that results are indicative and should be verified before filing.`;
+
+        const STREAM_OPTS = {
+          system: SYSTEM_PROMPT,
+          messages: convertedMessages,
           tools,
           toolApproval: {
-            insert_transaction: "user-approval",
-            update_transaction: "user-approval",
-            delete_transaction: "user-approval",
-            flag_anomaly: "user-approval",
-            resolve_flag: "user-approval",
+            insert_transaction: "user-approval" as const,
+            update_transaction: "user-approval" as const,
+            delete_transaction: "user-approval" as const,
+            flag_anomaly:       "user-approval" as const,
+            resolve_flag:       "user-approval" as const,
           },
           experimental_toolApprovalSecret: approvalSecret,
           stopWhen: stepCountIs(50),
           maxOutputTokens: 2000,
-        });
+        };
+
+        // Try each model in the cascade until one accepts the request.
+        // Errors thrown *before* streaming starts (404 model gone, 402 credits,
+        // 429 rate limit, 502/503 overload) are all retriable.
+        let result: ReturnType<typeof streamText> | null = null;
+        let lastStreamError: unknown = null;
+
+        for (const { id: cascadeModelId, model: cascadeModel } of modelCascade) {
+          try {
+            console.log(`[AuditX] Trying model: ${cascadeModelId}`);
+            const candidate = streamText({ model: cascadeModel, ...STREAM_OPTS });
+            // pipeThrough starts the stream and throws synchronously or on
+            // the first read if the model rejects — this is the earliest we
+            // can detect a bad model without consuming the full response.
+            // We rely on the AI SDK's internal retry throwing before yielding
+            // any chunks, so we just attempt to consume the first chunk.
+            const reader = candidate.toDataStream().getReader();
+            const first = await reader.read();
+            reader.releaseLock();
+            // If we get here, the model accepted. Re-use this stream.
+            result = candidate;
+            void first; // suppress unused warning
+            console.log(`[AuditX] Model accepted: ${cascadeModelId}`);
+            break;
+          } catch (e) {
+            lastStreamError = e;
+            const errMsg = String((e as Error)?.message ?? "").toLowerCase();
+            const status  = (e as { status?: number })?.status ?? 0;
+            const isSkippable =
+              status === 402 || status === 404 || status === 429 ||
+              status === 502 || status === 503 ||
+              errMsg.includes("unavailable") || errMsg.includes("credits") ||
+              errMsg.includes("quota") || errMsg.includes("rate limit") ||
+              errMsg.includes("overloaded") || errMsg.includes("not found") ||
+              errMsg.includes("free tier") || errMsg.includes("requires more");
+
+            if (isSkippable) {
+              console.warn(`[AuditX] Model ${cascadeModelId} skipped (${status || errMsg.slice(0, 80)}), trying next…`);
+              result = null;
+              continue;
+            }
+            // Non-retriable error — surface immediately
+            throw e;
+          }
+        }
+
+        if (!result) {
+          const errDetail = lastStreamError instanceof Error ? lastStreamError.message : "All free models are currently unavailable.";
+          console.error("[AuditX] All models in cascade failed:", errDetail);
+          return new Response(
+            JSON.stringify({
+              code: "provider_error",
+              message: "AuditX is temporarily unavailable. All AI providers are busy — your financial data was not changed. Please try again in a few minutes.",
+            }),
+            { status: 503, headers: { "Content-Type": "application/json" } },
+          );
+        }
 
         return result.toUIMessageStreamResponse({
           originalMessages: uiMessages,
