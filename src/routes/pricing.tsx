@@ -8,17 +8,15 @@ import { PageShell } from "@/components/site/PageShell";
 export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
-      { title: "AuditX Pricing — Free, Pro and Enterprise Plans" },
+      { title: "AuditX Pricing — Free, Pro and Professional Plans" },
       {
         name: "description",
         content:
-          "Compare AuditX plans: free parsing for 50 transactions a month, Pro at $9.99 and Enterprise multi-client audit tooling at $49.",
+          "Compare AuditX plans: free parsing for 50 transactions a month, Pro at $9.99 for active traders, and Professional for teams and brokerages at $49.",
       },
       { property: "og:title", content: "AuditX Pricing" },
       {
-        property: "og:description",
-        content: "Free, Pro and Enterprise plans for trade reconciliation and CGT reporting.",
-      },
+        property: "og:description", content: "Free, Pro and Professional plans for trade reconciliation and CGT reporting." },
     ],
   }),
   component: Pricing,
@@ -28,7 +26,7 @@ const rows: [string, string | boolean, string | boolean, string | boolean][] = [
   ["Parsed transactions / month", "50", "Unlimited", "Unlimited"],
   ["Tax profiles", "1", "3", "Unlimited"],
   ["CSV export", true, true, true],
-  ["PDF tax summary", false, true, true],
+  ["PDF tax reports", false, true, true],
   ["Anomaly detection", false, true, true],
   ["Tax-loss harvesting", false, true, true],
   ["Multi-account management", false, false, true],
@@ -54,7 +52,7 @@ function Pricing() {
   function handlePlanClick(planName: string) {
     if (planName === "Free") {
       navigate({ to: "/signup" });
-    } else {
+    } else if (planName === "Professional") {
       const subject = encodeURIComponent(`AuditX Plan Inquiry: ${planName}`);
       const body = encodeURIComponent(`Hi AuditX Team,
 
@@ -62,6 +60,8 @@ I am interested in the ${planName} plan.
 
 Please send me more details on how to get started.`);
       window.location.href = `mailto:sales@auditx.demo?subject=${subject}&body=${body}`;
+    } else {
+      navigate({ to: "/signup" });
     }
   }
 
@@ -92,9 +92,9 @@ Please send me more details on how to get started.`);
 
       <div className="mt-10 grid gap-6 md:grid-cols-3">
         {[
-          { name: "Free", price: "$0", note: "For getting your first book clean" },
+          { name: "Free", price: "$0", note: "For trying AuditX" },
           { name: "Pro", price: pro, note: "For active traders", popular: true },
-          { name: "Enterprise", price: ent, note: "For brokerages & managers" },
+          { name: "Professional", price: ent, note: "For professional teams and brokerages" },
         ].map((t, i) => (
           <Reveal key={t.name} i={i}>
             <Panel
@@ -118,12 +118,12 @@ Please send me more details on how to get started.`);
               <p className="mt-1 text-xs" style={{ color: "var(--ink-3)" }}>
                 {t.note}
               </p>
-              <Btn 
-                className="mt-6 w-full" 
+              <Btn
+                className="mt-6 w-full"
                 variant={t.popular ? "primary" : "secondary"}
                 onClick={() => handlePlanClick(t.name)}
               >
-                {t.name === "Enterprise" ? "Contact sales" : "Start Free Audit"}
+                {t.name === "Professional" ? "Contact sales" : "Start Free Audit"}
               </Btn>
             </Panel>
           </Reveal>
@@ -134,7 +134,7 @@ Please send me more details on how to get started.`);
         <table className="w-full min-w-[640px] border-collapse text-left">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-              {["Feature", "Free", "Pro", "Enterprise"].map((h) => (
+              {["Feature", "Free", "Pro", "Professional"].map((h) => (
                 <th key={h} className="py-3 text-sm font-semibold">
                   {h}
                 </th>
@@ -169,10 +169,10 @@ Please send me more details on how to get started.`);
         <div>
           <h3 className="text-lg font-semibold">Need custom retention or on-prem exports?</h3>
           <p className="mt-1.5 text-sm" style={{ color: "var(--ink-2)" }}>
-            Enterprise plans can be tailored per jurisdiction, client volume and audit policy.
+            Professional plans can be tailored per jurisdiction, client volume and audit policy.
           </p>
         </div>
-        <Btn onClick={() => window.location.href = "mailto:sales@auditx.demo?subject=Enterprise Inquiry"}>Contact sales</Btn>
+        <Btn onClick={() => window.location.href = "mailto:sales@auditx.demo?subject=Professional Inquiry"}>Contact sales</Btn>
       </Panel>
     </PageShell>
   );

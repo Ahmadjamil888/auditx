@@ -6,12 +6,11 @@ import {
   BarChart3,
   FileSearch,
   GitMerge,
-  Lock,
   ScanSearch,
   Shield,
   TrendingUp,
+  Upload,
 } from "lucide-react";
-import { LandingComposer } from "@/components/site/LandingComposer";
 import { Footer } from "@/components/site/Footer";
 import { LandingNavbar } from "@/components/site/LandingNavbar";
 import { StatusPill, Container, Reveal, Panel } from "@/components/kit";
@@ -26,15 +25,15 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "AuditX — AI Financial Audit & Trade Reconciliation for PSX and NSE" },
+      { title: "AuditX — Turn Broker Records into a Reconciled, Tax-Ready Ledger" },
       {
         name: "description",
         content:
-          "Upload your PSX or NSE broker slips. AuditX's agentic AI analyzes, reconciles, and computes your capital gains tax with full evidence trails. Free for 50 transactions/month.",
+          "Upload contract notes, broker statements, CSVs, PDFs, or trade records. AuditX extracts the data, reconciles it against your records, detects discrepancies, and produces a traceable tax-ready ledger.",
       },
       { name: "keywords", content: "PSX CGT calculator, NSE STCG LTCG, trade reconciliation, broker slip parser, capital gains tax Pakistan India, FIFO tax engine, AuditX" },
-      { property: "og:title", content: "AuditX — AI Financial Audit & Trade Reconciliation" },
-      { property: "og:description", content: "Stop spending weekends on spreadsheets. AuditX reconciles PSX and NSE trades in minutes with agentic AI, deterministic FIFO tax math, and evidence-backed findings." },
+      { property: "og:title", content: "AuditX — Turn Broker Records into a Reconciled, Tax-Ready Ledger" },
+      { property: "og:description", content: "Upload contract notes, broker statements, CSVs, PDFs, or trade records. AuditX extracts the data, reconciles it against your records, detects discrepancies, and produces a traceable tax-ready ledger." },
       { property: "og:url", content: "https://auditx.app/" },
     ],
   }),
@@ -58,42 +57,43 @@ const features = [
   {
     icon: FileSearch,
     title: "Multimodal Document Parser",
-    desc: "Drop any PDF, photo, CSV or broker export. Every field is extracted with a per-field confidence score — nothing invented.",
+    desc: "Extract transactions from PDFs, images, CSVs, XLSX files, and broker exports.",
   },
   {
     icon: ScanSearch,
     title: "Anomaly & Discrepancy Detector",
-    desc: "Rule-based engine catches duplicate fills, fee surcharges and WHT mismatches before they reach your filing.",
+    desc: "Detect duplicate fills, fee mismatches, WHT inconsistencies, missing records, and other discrepancies.",
   },
   {
     icon: TrendingUp,
     title: "FIFO Tax Engine",
-    desc: "Holding-period tiers, CGT bands and WHT computed by deterministic code. The AI reads; the engine calculates.",
+    desc: "Calculate cost basis and tax-related values using deterministic code rather than LLM-generated arithmetic.",
   },
   {
     icon: GitMerge,
     title: "Trade Reconciliation",
-    desc: "Compare transactions against broker records, match on reference, date and quantity, and list every delta.",
+    desc: "Match transactions against source records and show exact differences.",
   },
   {
     icon: Shield,
     title: "Immutable Audit Log",
-    desc: "Every mutation appends a SHA-256 hash-chained row. The chain can be independently verified client-side.",
+    desc: "Preserve a verifiable history of important ledger changes.",
   },
   {
     icon: BarChart3,
     title: "Portfolio Intelligence",
-    desc: "Cost-basis holding views, concentration risk, and an AI-generated health narrative from your real data.",
+    desc: "Analyze portfolio structure and surface useful financial insights from verified data.",
   },
 ];
 
 // ── Trust steps ───────────────────────────────────────────────────────────────
 
 const steps = [
-  { n: "01", title: "Upload", desc: "Slips, contract notes, vouchers, exports — any format." },
-  { n: "02", title: "Extract", desc: "AI reads every field with per-field confidence scoring." },
-  { n: "03", title: "Reconcile", desc: "Engine diffs ledger versus broker with precise deltas." },
-  { n: "04", title: "File", desc: "Exportable CGT summary and immutable audit trail." },
+  { n: "01", title: "Upload", desc: "Drop broker statements, contract notes, CSVs, PDFs, or images." },
+  { n: "02", title: "Extract", desc: "AuditX extracts transaction fields and assigns confidence scores." },
+  { n: "03", title: "Reconcile", desc: "Compare extracted records against your ledger and identify exact discrepancies." },
+  { n: "04", title: "Verify", desc: "Low-confidence fields and material discrepancies are routed for review." },
+  { n: "05", title: "Report", desc: "Generate a traceable, tax-ready report with supporting evidence." },
 ];
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
@@ -102,20 +102,20 @@ const tiers = [
   {
     name: "Free",
     price: "$0",
-    note: "50 parsed transactions / month",
-    items: ["1 tax profile", "CSV export", "Community support"],
+    note: "For trying AuditX",
+    items: ["50 parsed transactions/month", "1 tax profile", "CSV export", "Community support"],
   },
   {
     name: "Pro",
     price: "$9.99",
-    note: "For active retail traders",
+    note: "For active traders",
     popular: true,
-    items: ["Unlimited transactions", "PDF tax summary export", "Anomaly detection", "Tax-loss harvesting"],
+    items: ["Unlimited transactions", "PDF tax reports", "Anomaly detection", "Tax-loss harvesting"],
   },
   {
-    name: "Enterprise",
+    name: "Professional",
     price: "$49",
-    note: "Brokerages & portfolio managers",
+    note: "For professional teams and brokerages",
     items: ["Multi-client accounts", "Team roles", "API access", "Priority reconciliation"],
   },
 ];
@@ -127,8 +127,9 @@ const faqs = [
   ["Which brokers are supported?", "AuditX is format-driven: any PSX or NSE contract note, dividend voucher, CSV or Excel export can be parsed — including photographed slips."],
   ["Is the tax math AI-generated?", "No. FIFO lot matching, holding-period tiers and CGT bands are computed by deterministic code. The AI only reads documents and explains pre-computed results."],
   ["Which jurisdictions are covered?", "Pakistan (PSX CGT slabs with Filer/Non-Filer WHT) and India (NSE STCG/LTCG). More jurisdictions in progress."],
-  ["What can I export?", "CSV on every plan. PDF tax summaries and full audit-trail reports on Pro and Enterprise."],
+  ["What can I export?", "CSV on every plan. PDF tax summaries and full audit-trail reports on Pro and Professional."],
   ["How do I know a ledger row wasn't altered?", "Every mutation appends a SHA-256 hash-chained audit-log entry. The chain can be recomputed and verified from the Audit Trail screen."],
+  ["What happens when extraction confidence is low?", "Fields with confidence scores below 0.75 are automatically routed for manual review. AuditX never silently guesses — it asks you to verify."],
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -163,8 +164,17 @@ function Home() {
         />
 
         <div className="relative z-10 mx-auto w-full max-w-[800px] text-center">
-          {/* Spacer to maintain visual rhythm where the eyebrow was */}
-          <div className="mb-6 h-9" aria-hidden />
+          {/* Eyebrow */}
+          <motion.p
+            variants={reveal}
+            custom={0}
+            initial="hidden"
+            animate="visible"
+            className="mb-4 text-xs font-semibold uppercase tracking-widest"
+            style={{ color: "var(--color-accent)" }}
+          >
+            AUDIT-GRADE FINANCIAL RECONCILIATION
+          </motion.p>
 
           {/* Headline */}
           <motion.h1
@@ -180,9 +190,9 @@ function Home() {
               letterSpacing: "-0.02em",
             }}
           >
-            What can I analyze
+            Turn broker records into a
             <br />
-            for you today?
+            reconciled, tax-ready ledger.
           </motion.h1>
 
           {/* Sub-headline */}
@@ -194,18 +204,95 @@ function Home() {
             className="mx-auto mb-10 max-w-[560px] text-base leading-relaxed sm:text-lg"
             style={{ color: "var(--ink-2)" }}
           >
-            A full AI audit team — extraction, reconciliation, compliance and tax —
-            working from your real data, asking before writing.
+            Upload contract notes, broker statements, CSVs, PDFs, or trade records. AuditX extracts the data, reconciles it against your records, detects discrepancies, and produces a traceable tax-ready ledger.
           </motion.p>
 
-          {/* Composer — the primary focal point */}
+          {/* CTAs */}
           <motion.div
             variants={reveal}
             custom={3}
             initial="hidden"
             animate="visible"
+            className="mb-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
           >
-            <LandingComposer />
+            <Link to={ctaTo}>
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:shadow-md"
+                style={{ background: "var(--color-accent)", boxShadow: "0 4px 24px rgba(115,66,226,0.3)" }}
+              >
+                Start your first audit
+                <ArrowRight size={16} strokeWidth={2} />
+              </button>
+            </Link>
+            <Link to="/how-it-works">
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-all hover:shadow-md"
+                style={{ border: "1px solid var(--hairline)", color: "var(--ink-2)" }}
+              >
+                See how it works
+              </button>
+            </Link>
+          </motion.div>
+
+          {/* Supported formats */}
+          <motion.div
+            variants={reveal}
+            custom={4}
+            initial="hidden"
+            animate="visible"
+            className="mb-6 flex items-center justify-center gap-3 text-xs font-medium"
+            style={{ color: "var(--ink-3)" }}
+          >
+            <span>PDF</span>
+            <span style={{ color: "var(--hairline)" }}>·</span>
+            <span>CSV</span>
+            <span style={{ color: "var(--hairline)" }}>·</span>
+            <span>XLSX</span>
+            <span style={{ color: "var(--hairline)" }}>·</span>
+            <span>PNG</span>
+          </motion.div>
+
+          {/* Trust statement */}
+          <motion.p
+            variants={reveal}
+            custom={5}
+            initial="hidden"
+            animate="visible"
+            className="text-xs leading-relaxed"
+            style={{ color: "var(--ink-3)" }}
+          >
+            Your calculations are deterministic. AI extracts and explains — it does not invent your tax numbers.
+          </motion.p>
+
+          {/* Quick action chips */}
+          <motion.div
+            variants={reveal}
+            custom={6}
+            initial="hidden"
+            animate="visible"
+            className="mt-8 flex flex-wrap justify-center gap-2"
+          >
+            {[
+              { label: "Upload broker statement", link: ctaTo },
+              { label: "Calculate tax impact", link: ctaTo },
+              { label: "Review discrepancies", link: ctaTo },
+            ].map((chip) => (
+              <Link key={chip.label} to={chip.link}>
+                <button
+                  type="button"
+                  className="group flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-medium transition-all hover:border-[rgba(115,66,226,0.3)] hover:shadow-sm sm:text-sm"
+                  style={{
+                    border: "1px solid var(--hairline)",
+                    color: "var(--ink-2)",
+                  }}
+                >
+                  <Upload size={12} strokeWidth={2} style={{ color: "var(--color-accent)" }} />
+                  {chip.label}
+                </button>
+              </Link>
+            ))}
           </motion.div>
         </div>
       </section>
@@ -214,10 +301,10 @@ function Home() {
       <section style={{ background: "#fff", borderTop: "1px solid var(--hairline)", borderBottom: "1px solid var(--hairline)" }}>
         <Container className="py-8">
           <p className="text-center text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--ink-3)" }}>
-            Trusted by traders across
+            Designed for traders across
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm font-semibold" style={{ color: "var(--ink-3)" }}>
-            {["PSX · Pakistan", "NSE · India", "Meridian Capital", "SouthPort Securities", "Karachi Quant"].map((n) => (
+            {["PSX · Pakistan", "NSE · India", "Regional exchanges"].map((n) => (
               <span key={n}>{n}</span>
             ))}
           </div>
@@ -266,6 +353,98 @@ function Home() {
         </Container>
       </section>
 
+      {/* ─── PRODUCT DEMO ───────────────────────────────────────────────────── */}
+      <section style={{ background: "#fff" }}>
+        <Container className="py-24">
+          <div className="mb-14 text-center">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-accent)" }}>
+              Example workflow
+            </p>
+            <h2
+              style={{
+                fontFamily: "var(--font-heading)",
+                fontSize: "clamp(1.5rem,3vw,2.25rem)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              See AuditX in action
+            </h2>
+            <p className="mt-3 text-sm" style={{ color: "var(--ink-2)" }}>
+              Demo visualization — not actual production data
+            </p>
+          </div>
+          <Reveal>
+            <div
+              className="mx-auto max-w-3xl rounded-2xl bg-white p-8"
+              style={{ border: "1px solid var(--hairline)" }}
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex size-10 items-center justify-center rounded-lg"
+                    style={{ background: "rgba(115,66,226,0.1)" }}
+                  >
+                    <FileSearch size={18} style={{ color: "var(--color-accent)" }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Uploaded</p>
+                    <p className="text-xs" style={{ color: "var(--ink-3)" }}>broker_statement.pdf</p>
+                  </div>
+                </div>
+                <StatusPill tone="ok">Processed</StatusPill>
+              </div>
+
+              <div className="mb-6 grid grid-cols-2 gap-4">
+                <div className="rounded-xl p-4" style={{ background: "var(--color-login-bg)", border: "1px solid var(--hairline)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "var(--ink-3)" }}>Extracted</p>
+                  <p className="tnum mt-1 text-2xl font-bold">1,248</p>
+                  <p className="text-xs" style={{ color: "var(--ink-2)" }}>transactions</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ background: "var(--color-login-bg)", border: "1px solid var(--hairline)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "var(--ink-3)" }}>Matched</p>
+                  <p className="tnum mt-1 text-2xl font-bold">1,231</p>
+                  <p className="text-xs" style={{ color: "var(--ink-2)" }}>against ledger</p>
+                </div>
+              </div>
+
+              <div className="mb-6 grid grid-cols-3 gap-4">
+                <div className="rounded-xl p-4" style={{ background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.2)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "#FB923C" }}>Needs review</p>
+                  <p className="tnum mt-1 text-2xl font-bold">11</p>
+                  <p className="text-xs" style={{ color: "var(--ink-2)" }}>low confidence</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ background: "rgba(214,69,69,0.08)", border: "1px solid rgba(214,69,69,0.2)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "#D64545" }}>Discrepancies</p>
+                  <p className="tnum mt-1 text-2xl font-bold">6</p>
+                  <p className="text-xs" style={{ color: "var(--ink-2)" }}>flagged</p>
+                </div>
+                <div className="rounded-xl p-4" style={{ background: "rgba(115,66,226,0.08)", border: "1px solid rgba(115,66,226,0.2)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "var(--color-accent)" }}>Tax calculation</p>
+                  <p className="tnum mt-1 text-2xl font-bold">FIFO</p>
+                  <p className="text-xs" style={{ color: "var(--ink-2)" }}>deterministic</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4" style={{ background: "var(--color-login-bg)", border: "1px solid var(--hairline)" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: "var(--ink-3)" }}>Result</p>
+                    <p className="mt-1 text-sm">Tax-ready ledger generated with full audit trail</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white"
+                    style={{ background: "var(--color-accent)" }}
+                  >
+                    View Report
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </Container>
+      </section>
+
       {/* ─── HOW IT WORKS ────────────────────────────────────────────────────── */}
       <section style={{ background: "#fff" }}>
         <Container className="py-24">
@@ -280,10 +459,10 @@ function Home() {
                 letterSpacing: "-0.01em",
               }}
             >
-              Upload → Extract → Reconcile → File
+              Upload → Extract → Reconcile → Verify → Report
             </h2>
           </div>
-          <div className="relative grid gap-10 md:grid-cols-4">
+          <div className="relative grid gap-10 md:grid-cols-5">
             <div
               className="absolute top-5 right-10 left-10 hidden h-px md:block"
               style={{ background: "var(--hairline)" }}
@@ -308,12 +487,12 @@ function Home() {
         </Container>
       </section>
 
-      {/* ─── ARCHITECTURE ────────────────────────────────────────────────────── */}
+      {/* ─── WHY TRUST AUDITX? ─────────────────────────────────────────────────── */}
       <section style={{ background: "var(--color-login-bg)" }}>
         <Container className="grid items-center gap-16 py-24 md:grid-cols-2">
           <Reveal>
             <p className="mb-4 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-accent)" }}>
-              Architecture
+              Why trust AuditX?
             </p>
             <h2
               className="mb-4"
@@ -323,23 +502,24 @@ function Home() {
                 letterSpacing: "-0.01em",
               }}
             >
-              Immutable by construction,
-              <br />deterministic by design
+              Every important financial result
+              <br />can be traced back to its source data.
             </h2>
             <p className="mb-6 text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
-              Every mutation appends a SHA-256 hash-chained row to the audit log. Tax math runs as
-              unit-tested TypeScript — the model never produces a number.
+              AI performs extraction and classification. Deterministic code performs financial/tax calculations. Low-confidence extraction is flagged for review. Reconciliation exposes exact differences. Audit logs preserve the history of important changes. Organization-level security controls isolate customer data.
             </p>
             <ul className="space-y-3">
               {[
-                "Hash-chained audit log, verifiable client-side",
-                "FIFO cost basis with holding-period tiers",
-                "Confidence gating: &lt;0.75 routes to review",
-                "Per-organisation row-level security",
+                "AI extracts and classifies — it does not invent your tax numbers",
+                "Deterministic code performs financial/tax calculations",
+                "Low-confidence extraction is flagged for review",
+                "Reconciliation exposes exact differences",
+                "Audit logs preserve the history of important changes",
+                "Organization-level security controls isolate customer data",
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2.5 text-sm" style={{ color: "var(--ink-2)" }}>
                   <BadgeCheck size={16} strokeWidth={1.75} style={{ color: "var(--color-accent)", flexShrink: 0, marginTop: 1 }} />
-                  <span dangerouslySetInnerHTML={{ __html: t }} />
+                  <span>{t}</span>
                 </li>
               ))}
             </ul>
@@ -350,38 +530,49 @@ function Home() {
               className="rounded-2xl bg-white p-6"
               style={{ border: "1px solid var(--hairline)" }}
             >
-              <div className="space-y-3">
-                {["0x9f2a…c41d", "0x71be…08aa", "0x33c0…9e17"].map((h, i) => (
-                  <div
-                    key={h}
-                    className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{
-                      background: i === 0 ? "rgba(115,66,226,0.07)" : "var(--color-login-bg)",
-                      border: i === 0 ? "1px solid rgba(115,66,226,0.18)" : "1px solid var(--hairline)",
-                    }}
-                  >
-                    <span className="flex items-center gap-2 text-xs font-medium">
-                      <Lock size={13} strokeWidth={1.75} style={{ color: "var(--ink-3)" }} />
-                      block #{1042 - i}
-                    </span>
-                    <span className="tnum text-xs" style={{ color: "var(--ink-3)" }}>{h}</span>
+              <p className="mb-4 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--ink-3)" }}>
+                Provenance Trail
+              </p>
+              <div className="space-y-2">
+                {[
+                  { label: "SOURCE DOCUMENT", arrow: true },
+                  { label: "EXTRACTED FIELD", arrow: true },
+                  { label: "TRANSACTION", arrow: true },
+                  { label: "RECONCILIATION", arrow: true },
+                  { label: "CALCULATION", arrow: true },
+                  { label: "FINAL REPORT", arrow: false },
+                ].map((item, i) => (
+                  <div key={item.label}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium" style={{ color: "var(--color-accent)" }}>
+                        {item.label}
+                      </span>
+                      {item.arrow && (
+                        <span style={{ color: "var(--ink-3)" }}>→</span>
+                      )}
+                    </div>
+                    {i < 5 && (
+                      <div className="ml-0 h-4 w-px" style={{ background: "var(--hairline)" }} />
+                    )}
                   </div>
                 ))}
               </div>
-              <div className="mt-4">
-                <StatusPill tone="ok">Chain verified</StatusPill>
+              <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--hairline)" }}>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--ink-2)" }}>
+                  Every number has a verifiable chain back to the original document.
+                </p>
               </div>
             </div>
           </Reveal>
         </Container>
       </section>
 
-      {/* ─── TESTIMONIALS ────────────────────────────────────────────────────── */}
+      {/* ─── BUILT FOR MESSY REALITY ───────────────────────────────────────────── */}
       <section style={{ background: "#fff" }}>
         <Container className="py-24">
           <div className="mb-14 text-center">
             <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--color-accent)" }}>
-              Testimonials
+              Built for the messy reality of broker records
             </p>
             <h2
               style={{
@@ -390,35 +581,33 @@ function Home() {
                 letterSpacing: "-0.01em",
               }}
             >
-              Reconciliation, minus the weekend
+              AuditX handles the problems spreadsheets can't
             </h2>
           </div>
           <div className="grid gap-5 md:grid-cols-3">
             {[
-              ["Three days of month-end reconciliation collapsed into about twenty minutes.", "Sara Klein", "Portfolio Manager"],
-              ["The WHT mismatch flag alone caught a filer-status error worth six figures.", "Imran Qureshi", "Founder, SouthPort Securities"],
-              ["My accountant accepted the exported CGT summary without a single follow-up.", "Neha Raghavan", "Retail trader, NSE"],
-            ].map(([quote, name, role], i) => (
-              <Reveal key={name} i={i}>
+              { title: "Duplicate fills", desc: "Detect and flag duplicate transactions that inflate your ledger." },
+              { title: "Missing trades", desc: "Identify gaps between broker records and your ledger." },
+              { title: "Fee mismatches", desc: "Catch brokerage fee discrepancies that affect cost basis." },
+              { title: "WHT discrepancies", desc: "Flag withholding tax inconsistencies before filing." },
+              { title: "Inconsistent quantities", desc: "Spot quantity differences that break reconciliation." },
+              { title: "Incomplete records", desc: "Route low-confidence extractions for manual review." },
+            ].map((item, i) => (
+              <Reveal key={item.title} i={i}>
                 <div
                   className="h-full rounded-2xl bg-white p-6"
                   style={{ border: "1px solid var(--hairline)" }}
                 >
-                  <p className="mb-6 text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
-                    &ldquo;{quote}&rdquo;
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex size-9 items-center justify-center rounded-full text-xs font-semibold"
-                      style={{ background: "rgba(115,66,226,0.1)", color: "var(--color-accent)" }}
-                    >
-                      {String(name).charAt(0)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{name}</p>
-                      <p className="text-xs" style={{ color: "var(--ink-3)" }}>{role}</p>
-                    </div>
+                  <div
+                    className="mb-4 flex size-10 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(115,66,226,0.08)" }}
+                  >
+                    <ScanSearch size={18} strokeWidth={1.75} style={{ color: "var(--color-accent)" }} />
                   </div>
+                  <h3 className="mb-2 text-sm font-semibold">{item.title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
+                    {item.desc}
+                  </p>
                 </div>
               </Reveal>
             ))}
@@ -477,7 +666,7 @@ function Home() {
                       </li>
                     ))}
                   </ul>
-                  <Link to={t.name === "Enterprise" ? "/contact" : ctaTo}>
+                  <Link to={t.name === "Professional" ? "/contact" : ctaTo}>
                     <button
                       type="button"
                       className="flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold transition-all hover:shadow-md"
@@ -487,7 +676,7 @@ function Home() {
                           : { border: "1px solid var(--hairline)", color: "var(--ink-2)" }
                       }
                     >
-                      {t.name === "Enterprise" ? "Contact sales" : session ? "Go to Dashboard" : "Start Free Audit"}
+                      {t.name === "Professional" ? "Contact sales" : session ? "Go to Dashboard" : "Start Free Audit"}
                       <ArrowRight size={14} strokeWidth={2} />
                     </button>
                   </Link>
@@ -541,11 +730,11 @@ function Home() {
               lineHeight: 1.1,
             }}
           >
-            Close your book with evidence,
-            <br />not guesswork
+            Turn messy broker records into
+            <br />a clean, tax-ready ledger
           </h2>
           <p className="mx-auto mb-8 max-w-lg text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>
-            Parse your first 50 transactions free. No card, no broker credentials required.
+            Upload your first broker statement. Extract, reconcile, verify, and report with full traceability.
           </p>
           <Link to={ctaTo}>
             <button
@@ -553,10 +742,13 @@ function Home() {
               className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold transition-opacity hover:opacity-90"
               style={{ color: "var(--color-accent)" }}
             >
-              {session ? "Go to Dashboard" : "Start Free Audit"}
+              {session ? "Go to Dashboard" : "Start your first audit"}
               <ArrowRight size={16} strokeWidth={2} />
             </button>
           </Link>
+          <p className="mt-4 text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+            AuditX does not provide tax or legal advice.
+          </p>
         </Container>
       </section>
 

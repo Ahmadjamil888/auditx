@@ -16,7 +16,6 @@ import {
   Sparkles,
   TrendingUp,
   Upload,
-  Zap,
 } from "lucide-react";
 import {
   Area,
@@ -315,17 +314,16 @@ function MissionControl() {
           className="flex size-20 items-center justify-center rounded-3xl"
           style={{ background: "rgba(115,66,226,0.08)" }}
         >
-          <Zap size={36} style={{ color: "var(--color-accent)" }} />
+          <Upload size={36} style={{ color: "var(--color-accent)" }} />
         </div>
         <h1
           className="mt-6 text-2xl font-bold"
           style={{ fontFamily: "var(--font-heading)" }}
         >
-          Your Financial Intelligence Starts Here
+          No transactions yet
         </h1>
         <p className="mt-3 max-w-md text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
-          Upload your first broker statement. AuditX will extract transactions, reconcile records,
-          calculate tax, find anomalies, and build your financial timeline.
+          Upload your first broker statement and AuditX will extract and reconcile it.
         </p>
         <Link
           to="/app/parser"
@@ -333,11 +331,8 @@ function MissionControl() {
           style={{ background: "var(--color-accent)", boxShadow: "0 4px 24px rgba(115,66,226,0.3)" }}
         >
           <Upload size={16} />
-          Upload your first statement
+          Upload records
         </Link>
-        <p className="mt-4 max-w-sm text-xs leading-relaxed" style={{ color: "var(--ink-3)" }}>
-          Your finances don't need another dashboard. They need intelligence.
-        </p>
       </div>
     );
   }
