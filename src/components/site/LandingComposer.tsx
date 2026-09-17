@@ -18,12 +18,12 @@ import {
 // ── Suggestion chips ──────────────────────────────────────────────────────────
 
 export const LANDING_SUGGESTIONS = [
-  { label: "Upload broker statement",     prompt: "I want to upload my broker statement and extract transactions for reconciliation." },
+  { label: "Analyze portfolio",           prompt: "Analyze my current portfolio performance, concentration risk, and cost basis from my ledger." },
+  { label: "Review financial statement",  prompt: "Review my uploaded statement or ledger, extract every field, and summarize what needs attention." },
   { label: "Reconcile trades",            prompt: "Reconcile my recent trades against my ledger and list matched, unmatched and partial matches with evidence." },
+  { label: "Detect anomalies",            prompt: "Scan my ledger and open flags for anomalies, duplicates, fee surcharges and WHT mismatches." },
   { label: "Calculate tax impact",        prompt: "Calculate my realised capital gains and estimated CGT using the FIFO engine on my ledger." },
-  { label: "Review discrepancies",        prompt: "Scan my ledger and open flags for anomalies, duplicates, fee surcharges and WHT mismatches." },
-  { label: "Generate tax report",         prompt: "Generate a tax-ready report with supporting evidence from my verified ledger." },
-  { label: "View audit trail",            prompt: "Show me the audit trail for my recent ledger changes and modifications." },
+  { label: "Update unfinished records",   prompt: "Update my unfinished records that still need review, then prepare a spreadsheet template for new transactions." },
 ] as const;
 
 // ── Component ─────────────────────────────────────────────────────────────────

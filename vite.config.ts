@@ -18,5 +18,7 @@ export default defineConfig({
         external: [],
       },
     },
+    // Ensure .env files are loaded
+    envDir: "./",
   },
 });

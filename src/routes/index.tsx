@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -9,12 +9,14 @@ import {
   ScanSearch,
   Shield,
   TrendingUp,
-  Upload,
 } from "lucide-react";
+import { ChatComposer } from "@/components/agent/ChatComposer";
 import { Footer } from "@/components/site/Footer";
 import { LandingNavbar } from "@/components/site/LandingNavbar";
 import { StatusPill, Container, Reveal, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
+import { useState } from "react";
+import type { AgentAttachment } from "@/lib/agent-service";
 import {
   Accordion,
   AccordionContent,
@@ -47,7 +49,7 @@ const reveal = {
   visible: (i = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.6, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] as any },
   }),
 };
 
@@ -137,6 +139,37 @@ const faqs = [
 function Home() {
   const { session, loading } = useAuth();
   const ctaTo = !loading && session ? "/app/parser" : "/signup";
+  const [chatValue, setChatValue] = useState("");
+  const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const handleAddFiles = (files: FileList | null) => {
+    if (!files) return;
+    const newAttachments: AgentAttachment[] = Array.from(files).map((file) => ({
+      id: crypto.randomUUID(),
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      file,
+    }));
+    setAttachments((prev) => [...prev, ...newAttachments]);
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleSubmit = () => {
+    if (!chatValue.trim() && attachments.length === 0) return;
+    setIsBusy(true);
+    // Navigate to parser with the prompt and attachments
+    const navigate = useNavigate();
+    const message = chatValue.trim() || "Analyze the attached document(s).";
+    // Store in localStorage for the parser to pick up
+    localStorage.setItem("pendingPrompt", message);
+    localStorage.setItem("pendingAttachments", JSON.stringify(attachments.map(a => ({ name: a.name, type: a.type, size: a.size }))));
+    navigate({ to: !loading && session ? "/app/parser" : "/signin" });
+  };
 
   return (
     <div
@@ -164,17 +197,8 @@ function Home() {
         />
 
         <div className="relative z-10 mx-auto w-full max-w-[800px] text-center">
-          {/* Eyebrow */}
-          <motion.p
-            variants={reveal}
-            custom={0}
-            initial="hidden"
-            animate="visible"
-            className="mb-4 text-xs font-semibold uppercase tracking-widest"
-            style={{ color: "var(--color-accent)" }}
-          >
-            AUDIT-GRADE FINANCIAL RECONCILIATION
-          </motion.p>
+          {/* Spacer to maintain visual rhythm where the eyebrow was */}
+          <div className="mb-6 h-9" aria-hidden />
 
           {/* Headline */}
           <motion.h1
@@ -190,9 +214,9 @@ function Home() {
               letterSpacing: "-0.02em",
             }}
           >
-            Turn broker records into a
+            What can I analyze
             <br />
-            reconciled, tax-ready ledger.
+            for you today?
           </motion.h1>
 
           {/* Sub-headline */}
@@ -204,95 +228,28 @@ function Home() {
             className="mx-auto mb-10 max-w-[560px] text-base leading-relaxed sm:text-lg"
             style={{ color: "var(--ink-2)" }}
           >
-            Upload contract notes, broker statements, CSVs, PDFs, or trade records. AuditX extracts the data, reconciles it against your records, detects discrepancies, and produces a traceable tax-ready ledger.
+            A full AI audit team — extraction, reconciliation, compliance and tax —
+            working from your real data, asking before writing.
           </motion.p>
 
-          {/* CTAs */}
+          {/* Composer — the primary focal point */}
           <motion.div
             variants={reveal}
             custom={3}
             initial="hidden"
             animate="visible"
-            className="mb-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
           >
-            <Link to={ctaTo}>
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:shadow-md"
-                style={{ background: "var(--color-accent)", boxShadow: "0 4px 24px rgba(115,66,226,0.3)" }}
-              >
-                Start your first audit
-                <ArrowRight size={16} strokeWidth={2} />
-              </button>
-            </Link>
-            <Link to="/how-it-works">
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-all hover:shadow-md"
-                style={{ border: "1px solid var(--hairline)", color: "var(--ink-2)" }}
-              >
-                See how it works
-              </button>
-            </Link>
-          </motion.div>
-
-          {/* Supported formats */}
-          <motion.div
-            variants={reveal}
-            custom={4}
-            initial="hidden"
-            animate="visible"
-            className="mb-6 flex items-center justify-center gap-3 text-xs font-medium"
-            style={{ color: "var(--ink-3)" }}
-          >
-            <span>PDF</span>
-            <span style={{ color: "var(--hairline)" }}>·</span>
-            <span>CSV</span>
-            <span style={{ color: "var(--hairline)" }}>·</span>
-            <span>XLSX</span>
-            <span style={{ color: "var(--hairline)" }}>·</span>
-            <span>PNG</span>
-          </motion.div>
-
-          {/* Trust statement */}
-          <motion.p
-            variants={reveal}
-            custom={5}
-            initial="hidden"
-            animate="visible"
-            className="text-xs leading-relaxed"
-            style={{ color: "var(--ink-3)" }}
-          >
-            Your calculations are deterministic. AI extracts and explains — it does not invent your tax numbers.
-          </motion.p>
-
-          {/* Quick action chips */}
-          <motion.div
-            variants={reveal}
-            custom={6}
-            initial="hidden"
-            animate="visible"
-            className="mt-8 flex flex-wrap justify-center gap-2"
-          >
-            {[
-              { label: "Upload broker statement", link: ctaTo },
-              { label: "Calculate tax impact", link: ctaTo },
-              { label: "Review discrepancies", link: ctaTo },
-            ].map((chip) => (
-              <Link key={chip.label} to={chip.link}>
-                <button
-                  type="button"
-                  className="group flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-medium transition-all hover:border-[rgba(115,66,226,0.3)] hover:shadow-sm sm:text-sm"
-                  style={{
-                    border: "1px solid var(--hairline)",
-                    color: "var(--ink-2)",
-                  }}
-                >
-                  <Upload size={12} strokeWidth={2} style={{ color: "var(--color-accent)" }} />
-                  {chip.label}
-                </button>
-              </Link>
-            ))}
+            <ChatComposer
+              value={chatValue}
+              onChange={setChatValue}
+              onSubmit={handleSubmit}
+              attachments={attachments}
+              onAddFiles={handleAddFiles}
+              onRemoveAttachment={handleRemoveAttachment}
+              busy={isBusy}
+              placeholder="Ask anything about your finances, trades, documents, or financial data…"
+              disabled={false}
+            />
           </motion.div>
         </div>
       </section>

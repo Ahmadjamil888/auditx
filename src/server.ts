@@ -47,6 +47,10 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Log available environment variables for debugging
+      console.log("[AuditX Server] env type:", typeof env);
+      console.log("[AuditX Server] env keys:", env ? Object.keys(env as Record<string, unknown>) : "env is undefined");
+      
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

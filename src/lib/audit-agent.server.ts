@@ -29,8 +29,16 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 function resolveApiKey(): string | undefined {
   // process.env works on Node/Vercel/Cloudflare Workers
   const fromProcess = process.env["OPENROUTER_API_KEY"];
-  if (fromProcess && fromProcess.length >= 10 && !fromProcess.startsWith("your-")) {
+  console.log("[AuditX] process.env.OPENROUTER_API_KEY:", fromProcess ? `exists (length: ${fromProcess.length})` : "undefined");
+  if (fromProcess && fromProcess.length >= 10) {
     return fromProcess;
+  }
+
+  // Try VITE_ prefixed version (for Vite builds)
+  const fromProcessVite = process.env["VITE_OPENROUTER_API_KEY"];
+  console.log("[AuditX] process.env.VITE_OPENROUTER_API_KEY:", fromProcessVite ? `exists (length: ${fromProcessVite.length})` : "undefined");
+  if (fromProcessVite && fromProcessVite.length >= 10) {
+    return fromProcessVite;
   }
 
   // import.meta.env is injected by Vite for VITE_* variables — useful in dev
@@ -39,13 +47,16 @@ function resolveApiKey(): string | undefined {
     const fromVite = (import.meta.env as Record<string, string | undefined>)[
       "VITE_OPENROUTER_API_KEY"
     ];
-    if (fromVite && fromVite.length >= 10 && !fromVite.startsWith("your-")) {
+    console.log("[AuditX] import.meta.env.VITE_OPENROUTER_API_KEY:", fromVite ? `exists (length: ${fromVite.length})` : "undefined");
+    if (fromVite && fromVite.length >= 10) {
       return fromVite;
     }
   } catch {
     // import.meta.env may not exist in all runtimes — safe to ignore
+    console.log("[AuditX] import.meta.env not available");
   }
 
+  console.log("[AuditX] No valid API key found");
   return undefined;
 }
 
@@ -106,9 +117,9 @@ export async function resolveAgentModel(): Promise<ResolvedModel | null> {
   const apiKey = resolveApiKey();
 
   if (!apiKey) {
-    console.error(
+    console.warn(
       "[AuditX] OPENROUTER_API_KEY is not set. " +
-      "Add it to your Vercel environment variables (or .env for local dev).",
+      "AI features will be disabled. Add it to your .env file for local dev or Vercel environment variables for production.",
     );
     return null;
   }
