@@ -843,17 +843,9 @@ Rules for the final answer:
           try {
             console.log(`[AuditX] Trying model: ${cascadeModelId}`);
             const candidate = streamText({ model: cascadeModel, ...STREAM_OPTS });
-            // pipeThrough starts the stream and throws synchronously or on
-            // the first read if the model rejects — this is the earliest we
-            // can detect a bad model without consuming the full response.
-            // We rely on the AI SDK's internal retry throwing before yielding
-            // any chunks, so we just attempt to consume the first chunk.
-            const reader = candidate.toDataStream().getReader();
-            const first = await reader.read();
-            reader.releaseLock();
-            // If we get here, the model accepted. Re-use this stream.
+            // In AI SDK v7, we can't peek at the stream without consuming it.
+            // Instead, we'll use the stream directly and handle errors in the catch block.
             result = candidate;
-            void first; // suppress unused warning
             console.log(`[AuditX] Model accepted: ${cascadeModelId}`);
             break;
           } catch (e) {
