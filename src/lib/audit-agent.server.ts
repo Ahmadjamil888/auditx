@@ -26,7 +26,22 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 // ── Resolve the API key from either env var name ──────────────────────────────
 
-function resolveApiKey(): string | undefined {
+function resolveApiKey(env?: Record<string, unknown>): string | undefined {
+  // First check the passed env object (for serverless/Vercel)
+  if (env) {
+    const fromEnv = env["OPENROUTER_API_KEY"] as string | undefined;
+    console.log("[AuditX] env.OPENROUTER_API_KEY:", fromEnv ? `exists (length: ${fromEnv.length})` : "undefined");
+    if (fromEnv && fromEnv.length >= 10) {
+      return fromEnv;
+    }
+
+    const fromEnvVite = env["VITE_OPENROUTER_API_KEY"] as string | undefined;
+    console.log("[AuditX] env.VITE_OPENROUTER_API_KEY:", fromEnvVite ? `exists (length: ${fromEnvVite.length})` : "undefined");
+    if (fromEnvVite && fromEnvVite.length >= 10) {
+      return fromEnvVite;
+    }
+  }
+
   // process.env works on Node/Vercel/Cloudflare Workers
   const fromProcess = process.env["OPENROUTER_API_KEY"];
   console.log("[AuditX] process.env.OPENROUTER_API_KEY:", fromProcess ? `exists (length: ${fromProcess.length})` : "undefined");
@@ -113,8 +128,8 @@ export interface ResolvedModel {
 // Returns null only when the API key is genuinely absent/invalid so the
 // caller can return a clear 500 to the client.
 
-export async function resolveAgentModel(): Promise<ResolvedModel | null> {
-  const apiKey = resolveApiKey();
+export async function resolveAgentModel(env?: Record<string, unknown>): Promise<ResolvedModel | null> {
+  const apiKey = resolveApiKey(env);
 
   if (!apiKey) {
     console.warn(

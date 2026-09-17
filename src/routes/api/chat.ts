@@ -222,7 +222,14 @@ export const Route = createFileRoute("/api/chat")({
         const approvalSecret = process.env["TOOL_APPROVAL_SECRET"] ?? "auditx-tool-approval";
         if (!url || !key) return new Response("Database configuration is missing", { status: 500 });
 
-        const resolved = await resolveAgentModel();
+        // Get env from global storage (set in server.ts)
+        const env = (globalThis as any).__VERCEL_ENV__;
+        console.log("[AuditX Chat] env from global:", env ? "exists" : "undefined");
+        if (env) {
+          console.log("[AuditX Chat] env keys:", Object.keys(env));
+        }
+
+        const resolved = await resolveAgentModel(env);
         if (!resolved) {
           // Key is missing or placeholder — tell the operator exactly what to do
           console.warn(

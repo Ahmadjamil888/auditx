@@ -9,6 +9,11 @@ type ServerEntry = {
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
+// Store env globally for access in API routes
+declare global {
+  var __VERCEL_ENV__: Record<string, unknown> | undefined;
+}
+
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
@@ -47,6 +52,9 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Store env globally for API routes to access
+      globalThis.__VERCEL_ENV__ = env as Record<string, unknown> | undefined;
+      
       // Log available environment variables for debugging
       console.log("[AuditX Server] env type:", typeof env);
       console.log("[AuditX Server] env keys:", env ? Object.keys(env as Record<string, unknown>) : "env is undefined");
