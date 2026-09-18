@@ -28,7 +28,7 @@ import {
   getFinancialHealth,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
-import { streamCompletion, isKeyMissing } from "@/lib/openrouter-client";
+import { streamCompletion, isKeyMissing } from "@/lib/groq-client";
 
 // ── Context-aware suggestions ─────────────────────────────────────────────────
 

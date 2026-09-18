@@ -1,6 +1,8 @@
-// ─── AuditX AI Provider — OpenRouter (primary) ───────────────────────────────
+// ─── AuditX AI Provider — Groq (primary) ───────────────────────────────────────
 //
-// OpenRouter exposes an OpenAI-compatible endpoint at https://openrouter.ai/api/v1.
+// Groq provides fast inference with open-source models.
+// API: https://console.groq.com/docs
+// Base URL: https://api.groq.com/openai/v1
 //
 // MODEL STRATEGY
 // resolveAgentModel() no longer probes models at cold-start — probing wastes
@@ -10,105 +12,102 @@
 // in api/chat.ts will throw an isProviderError and the delegate_agent loop
 // will cascade through the remaining models automatically.
 //
-// API KEY RESOLUTION (in priority order):
-//   1. process.env.OPENROUTER_API_KEY       ← set in Vercel env vars
-//   2. import.meta.env.VITE_OPENROUTER_API_KEY ← Vite-injected fallback
-//
-// Both names are accepted so the same code works in dev (Vite) and production
-// (Vercel / Cloudflare Workers) without any extra configuration.
+// API KEY RESOLUTION:
+//   GROQ_API_KEY from environment variables (server-side only)
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel as LanguageModelV1 } from "ai";
 
-// ── OpenRouter base URL ───────────────────────────────────────────────────────
+// ── Groq base URL ───────────────────────────────────────────────────────
 
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const GROQ_BASE = "https://api.groq.com/openai/v1";
 
-// ── Resolve the API key from either env var name ──────────────────────────────
+// ── Resolve the API key from environment ──────────────────────────────
 
-function resolveApiKey(env?: Record<string, unknown>): string | undefined {
+// Global state for API key rotation
+let currentKeyIndex = 0;
+const API_KEY_NAMES = ["GROQ_API_KEY", "GROQ_API_KEY_TWO"] as const;
+
+function resolveApiKey(env?: Record<string, unknown>, requestedIndex?: number): string | undefined {
+  const keyIndex = requestedIndex ?? currentKeyIndex;
+  const keyName = API_KEY_NAMES[keyIndex % API_KEY_NAMES.length];
+
   // First check the passed env object (for serverless/Vercel)
   if (env) {
-    const fromEnv = env["OPENROUTER_API_KEY"] as string | undefined;
-    console.log("[AuditX] env.OPENROUTER_API_KEY:", fromEnv ? `exists (length: ${fromEnv.length})` : "undefined");
+    const fromEnv = env[keyName] as string | undefined;
+    console.log(`[AuditX] env.${keyName}:`, fromEnv ? `exists (length: ${fromEnv.length})` : "undefined");
     if (fromEnv && fromEnv.length >= 10) {
       return fromEnv;
-    }
-
-    const fromEnvVite = env["VITE_OPENROUTER_API_KEY"] as string | undefined;
-    console.log("[AuditX] env.VITE_OPENROUTER_API_KEY:", fromEnvVite ? `exists (length: ${fromEnvVite.length})` : "undefined");
-    if (fromEnvVite && fromEnvVite.length >= 10) {
-      return fromEnvVite;
     }
   }
 
   // process.env works on Node/Vercel/Cloudflare Workers
-  const fromProcess = process.env["OPENROUTER_API_KEY"];
-  console.log("[AuditX] process.env.OPENROUTER_API_KEY:", fromProcess ? `exists (length: ${fromProcess.length})` : "undefined");
+  const fromProcess = process.env[keyName];
+  console.log(`[AuditX] process.env.${keyName}:`, fromProcess ? `exists (length: ${fromProcess.length})` : "undefined");
   if (fromProcess && fromProcess.length >= 10) {
     return fromProcess;
   }
 
-  // Try VITE_ prefixed version (for Vite builds)
-  const fromProcessVite = process.env["VITE_OPENROUTER_API_KEY"];
-  console.log("[AuditX] process.env.VITE_OPENROUTER_API_KEY:", fromProcessVite ? `exists (length: ${fromProcessVite.length})` : "undefined");
-  if (fromProcessVite && fromProcessVite.length >= 10) {
-    return fromProcessVite;
-  }
-
-  // import.meta.env is injected by Vite for VITE_* variables — useful in dev
-  // and in SSR builds where Vite bundles the value in.
-  try {
-    const fromVite = (import.meta.env as Record<string, string | undefined>)[
-      "VITE_OPENROUTER_API_KEY"
-    ];
-    console.log("[AuditX] import.meta.env.VITE_OPENROUTER_API_KEY:", fromVite ? `exists (length: ${fromVite.length})` : "undefined");
-    if (fromVite && fromVite.length >= 10) {
-      return fromVite;
+  // Try fallback key if primary is missing
+  if (keyIndex === 0) {
+    const fallbackKey = resolveApiKey(env, 1);
+    if (fallbackKey) {
+      currentKeyIndex = 1;
+      return fallbackKey;
     }
-  } catch {
-    // import.meta.env may not exist in all runtimes — safe to ignore
-    console.log("[AuditX] import.meta.env not available");
   }
 
-  console.log("[AuditX] No valid API key found");
+  console.log("[AuditX] No valid GROQ_API_KEY found");
   return undefined;
 }
 
-// ── Free models cascade (all support tool calling) ───────────────────────────
-// Listed best-first. delegate_agent tries each in order on quota/provider errors.
-// IMPORTANT: only ":free" suffix models are truly zero-cost on OpenRouter.
-// Verify availability at https://openrouter.ai/models?q=:free
-//
-//  1. meta-llama/llama-3.3-70b-instruct:free — reliable, broadly available
-//  2. mistralai/mistral-7b-instruct:free     — lightweight, very available
-//  3. google/gemma-3-27b-it:free             — capable, free tier
-//  4. deepseek/deepseek-chat-v3-0324:free    — fast, good tool use
-//  5. nvidia/nemotron-3-ultra-550b-a55b:free — strong but sometimes overloaded
-//  6. inclusionai/ling-3.0-flash-fin:free    — finance-focused fallback
+// Rotate to the next API key
+export function rotateApiKey(): void {
+  currentKeyIndex = (currentKeyIndex + 1) % API_KEY_NAMES.length;
+  console.log(`[AuditX] Rotating to ${API_KEY_NAMES[currentKeyIndex]}`);
+}
 
-export const FREE_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "mistralai/mistral-7b-instruct:free",
-  "google/gemma-3-27b-it:free",
-  "deepseek/deepseek-chat-v3-0324:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "inclusionai/ling-3.0-flash-fin:free",
+// Get current API key name for logging
+export function getCurrentKeyName(): string {
+  return API_KEY_NAMES[currentKeyIndex];
+}
+
+// ── Resolve the model from environment ──────────────────────────────
+
+function resolveModel(): string {
+  return (
+    process.env["GROQ_MODEL"] ||
+    (import.meta.env as Record<string, string | undefined>)["VITE_GROQ_MODEL"] ||
+    "llama-3.3-70b-versatile"
+  );
+}
+
+// ── Groq model cascade(all support tool calling) ───────────────────────────
+// Listed best-first. delegate_agent tries each in order on quota/provider errors.
+// Verify availability at https://console.groq.com/docs/models
+//
+//  1. llama-3.3-70b-versatile — Fast, strong reasoning
+//  2. llama-3.1-70b-versatile — Good for complex tasks
+//  3. mixtral-8x7b-32768 — Excellent tool calling
+//  4. gemma2-9b-it — Lightweight, very fast
+
+export const GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-70b-versatile",
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it",
 ] as const;
 
-export type FreeModel = (typeof FREE_MODELS)[number];
+export type GroqModel = (typeof GROQ_MODELS)[number];
 
 // ── Provider factory ──────────────────────────────────────────────────────────
 
-export function createOpenRouterProvider(apiKey: string) {
+export function createGroqProvider(apiKey: string) {
   return createOpenAICompatible({
-    name: "openrouter",
-    baseURL: OPENROUTER_BASE,
+    name: "groq",
+    baseURL: GROQ_BASE,
     headers: {
-      "Authorization":               `Bearer ${apiKey}`,
-      "HTTP-Referer":                "https://auditx-beta.vercel.app",
-      "X-Title":                     "AuditX - AI Financial Audit",
-      "X-OpenRouter-Allow-Fallback": "1",
+      "Authorization": `Bearer ${apiKey}`,
     },
   });
 }
@@ -116,11 +115,11 @@ export function createOpenRouterProvider(apiKey: string) {
 // ── Resolved model result ─────────────────────────────────────────────────────
 
 export interface ResolvedModel {
-  provider: "openrouter";
-  modelId:  FreeModel;
+  provider: "groq";
+  modelId:  GroqModel;
   model:    LanguageModelV1;
   /** Full ordered cascade — the POST handler should try these in order */
-  cascade:  Array<{ id: FreeModel; model: LanguageModelV1 }>;
+  cascade:  Array<{ id: GroqModel; model: LanguageModelV1 }>;
 }
 
 // ── resolveAgentModel ─────────────────────────────────────────────────────────
@@ -133,18 +132,18 @@ export async function resolveAgentModel(env?: Record<string, unknown>): Promise<
 
   if (!apiKey) {
     console.warn(
-      "[AuditX] OPENROUTER_API_KEY is not set. " +
+      "[AuditX] GROQ_API_KEY is not set. " +
       "AI features will be disabled. Add it to your .env file for local dev or Vercel environment variables for production.",
     );
     return null;
   }
 
-  const provider = createOpenRouterProvider(apiKey);
-  const primaryModel = FREE_MODELS[0];
-  const cascade = FREE_MODELS.map((id) => ({ id, model: provider(id) as LanguageModelV1 }));
+  const provider = createGroqProvider(apiKey);
+  const primaryModel = resolveModel() as GroqModel;
+  const cascade = GROQ_MODELS.map((id) => ({ id, model: provider(id) as LanguageModelV1 }));
 
   return {
-    provider: "openrouter",
+    provider: "groq",
     modelId:  primaryModel,
     model:    cascade[0]!.model,
     cascade,
@@ -166,6 +165,7 @@ export function isProviderError(e: unknown): boolean {
     msg.includes("503") ||
     msg.includes("quota") ||
     msg.includes("credits") ||
+    msg.includes("credit") ||
     msg.includes("resource_exhausted") ||
     msg.includes("rate limit") ||
     msg.includes("rate-limit") ||
@@ -174,6 +174,8 @@ export function isProviderError(e: unknown): boolean {
     msg.includes("upstream error") ||
     msg.includes("provider_unavailable") ||
     msg.includes("requires more credits") ||
+    msg.includes("insufficient credits") ||
+    msg.includes("credit limit") ||
     code === 402 ||
     code === 429 ||
     code === 502 ||
@@ -193,9 +195,9 @@ export const isQuotaError = isProviderError;
 
 export function resolveModelFromKey(
   apiKey: string,
-  modelId: FreeModel = FREE_MODELS[0],
+  modelId: GroqModel = GROQ_MODELS[0],
 ): LanguageModelV1 {
-  return createOpenRouterProvider(apiKey)(modelId) as LanguageModelV1;
+  return createGroqProvider(apiKey)(modelId) as LanguageModelV1;
 }
 
 // ── getModelCascade ───────────────────────────────────────────────────────────
@@ -203,7 +205,7 @@ export function resolveModelFromKey(
 
 export function getModelCascade(
   apiKey: string,
-): Array<{ id: FreeModel; model: LanguageModelV1 }> {
-  const provider = createOpenRouterProvider(apiKey);
-  return FREE_MODELS.map((id) => ({ id, model: provider(id) as LanguageModelV1 }));
+): Array<{ id: GroqModel; model: LanguageModelV1 }> {
+  const provider = createGroqProvider(apiKey);
+  return GROQ_MODELS.map((id) => ({ id, model: provider(id) as LanguageModelV1 }));
 }

@@ -1,35 +1,29 @@
-// ─── OpenRouter client-side helper ───────────────────────────────────────────
+// ─── Groq client-side helper ───────────────────────────────────────────
 // Used by browser-side components (CommandBar, AskWhy, Intelligence, Tax AI).
 // Server-side agent uses audit-agent.server.ts instead.
 //
-// The env var exposed to the browser is VITE_OPENROUTER_API_KEY.
-// Free model cascade (skips overloaded providers automatically):
-//   1. deepseek/deepseek-r1-0528:free          — strong reasoning
-//   2. deepseek/deepseek-chat-v3-0324:free     — fast, good tool use
-//   3. meta-llama/llama-3.3-70b-instruct:free  — reliable, broadly available
-//   4. mistralai/mistral-7b-instruct:free      — lightweight, rarely overloaded
-//   5. nvidia/nemotron-3-ultra-550b-a55b:free  — great but often overloaded
-//   6. inclusionai/ling-3.0-flash-fin:free     — finance-focused fallback
-//   7. openrouter/free                         — always works (auto-selected)
+// The env var exposed to the browser is VITE_GROQ_API_KEY.
+// Model cascade (skips overloaded providers automatically):
+//   1. llama-3.3-70b-versatile          — fast, strong reasoning
+//   2. llama-3.1-70b-versatile         — good for complex tasks
+//   3. mixtral-8x7b-32768              — excellent tool calling
+//   4. gemma2-9b-it                    — lightweight, very fast
 
-const BASE = "https://openrouter.ai/api/v1";
+const BASE = "https://api.groq.com/openai/v1";
 
-// Free model cascade for client-side streaming
-// Only ":free" suffix models — openrouter/auto can route to paid models
+// Model cascade for client-side streaming
 const CLIENT_MODELS = [
-  "deepseek/deepseek-r1-0528:free",
-  "deepseek/deepseek-chat-v3-0324:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "mistralai/mistral-7b-instruct:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "inclusionai/ling-3.0-flash-fin:free",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-70b-versatile",
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it",
 ] as const;
 
 type ClientModel = (typeof CLIENT_MODELS)[number];
 
 function getKey(): string {
   return (
-    (import.meta.env["VITE_OPENROUTER_API_KEY"] as string | undefined) ?? ""
+    (import.meta.env["VITE_GROQ_API_KEY"] as string | undefined) ?? ""
   );
 }
 
@@ -42,7 +36,7 @@ function isQuota(status: number): boolean {
   return status === 429 || status === 502 || status === 503;
 }
 
-/** Stream a completion from OpenRouter, yielding text deltas. */
+/** Stream a completion from Groq, yielding text deltas. */
 export async function* streamCompletion(opts: {
   systemPrompt: string;
   userPrompt: string;
@@ -51,7 +45,7 @@ export async function* streamCompletion(opts: {
   model?: ClientModel;
 }): AsyncGenerator<string> {
   if (isKeyMissing()) {
-    yield "AI is not configured. Add VITE_OPENROUTER_API_KEY to your environment variables.";
+    yield "AI is not configured. Add VITE_GROQ_API_KEY to your environment variables.";
     return;
   }
 
@@ -64,8 +58,6 @@ export async function* streamCompletion(opts: {
       headers: {
         "Authorization":  `Bearer ${key}`,
         "Content-Type":   "application/json",
-        "HTTP-Referer":   "https://auditx.app",
-        "X-Title":        "AuditX",
       },
       body: JSON.stringify({
         model,
@@ -80,17 +72,17 @@ export async function* streamCompletion(opts: {
     });
 
     if (isQuota(res.status)) {
-      console.warn(`[OpenRouter client] Quota on ${model}, trying next…`);
+      console.warn(`[Groq client] Quota on ${model}, trying next…`);
       continue;
     }
 
     if (!res.ok) {
       const msg = await res.text().catch(() => res.statusText);
-      throw new Error(`OpenRouter error ${res.status}: ${msg}`);
+      throw new Error(`Groq error ${res.status}: ${msg}`);
     }
 
     if (!res.body) {
-      throw new Error("OpenRouter returned no response body.");
+      throw new Error("Groq returned no response body.");
     }
 
     const reader  = res.body.getReader();
@@ -118,7 +110,7 @@ export async function* streamCompletion(opts: {
     return; // success — don't try next model
   }
 
-  yield "All free AI models are currently busy. Please try again in a moment.";
+  yield "All AI models are currently busy. Please try again in a moment.";
 }
 
 /** Non-streaming: collect full text. */

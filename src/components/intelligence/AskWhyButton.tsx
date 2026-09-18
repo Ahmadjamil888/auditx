@@ -14,7 +14,7 @@ import {
   detectIntent,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
-import { streamCompletion, isKeyMissing } from "@/lib/openrouter-client";
+import { streamCompletion, isKeyMissing } from "@/lib/groq-client";
 
 export interface AskWhyContext {
   metric: string;

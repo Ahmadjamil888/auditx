@@ -28,7 +28,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { useAIContext } from "@/lib/financial-intelligence-hooks";
 import { detectIntent, buildIntelligencePrompt, getPortfolioSummary, getTaxLiability, getUnreconciledTransactions, getCriticalAnomalies, getFinancialHealth, type IntelligenceToolContext } from "@/lib/intelligence-tools";
-import { streamCompletion, isKeyMissing } from "@/lib/openrouter-client";
+import { streamCompletion, isKeyMissing } from "@/lib/groq-client";
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
 

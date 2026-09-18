@@ -1,13 +1,10 @@
-// ─── AuditX AI Service — Agentic pipeline on OpenRouter ─────────────────────
+// ─── AuditX AI Service — Agentic pipeline on Groq ─────────────────────────────
 //
-// MODEL CASCADE (free tier models on OpenRouter):
-//   1. deepseek/deepseek-r1-0528:free          → primary (strong reasoning)
-//   2. deepseek/deepseek-chat-v3-0324:free     → fast, good tool use
-//   3. meta-llama/llama-3.3-70b-instruct:free  → reliable, broadly available
-//   4. mistralai/mistral-7b-instruct:free      → lightweight, rarely overloaded
-//   5. nvidia/nemotron-3-ultra-550b-a55b:free  → great but often overloaded
-//   6. inclusionai/ling-3.0-flash-fin:free     → finance-focused fallback
-//   7. openrouter/free                         → last resort (auto-selected)
+// MODEL CASCADE (Groq models):
+//   1. llama-3.3-70b-versatile          → primary (fast, strong reasoning)
+//   2. llama-3.1-70b-versatile         → good for complex tasks
+//   3. mixtral-8x7b-32768              → excellent tool calling
+//   4. gemma2-9b-it                    → lightweight, very fast
 //
 // AGENTIC ARCHITECTURE:
 //   • Retry-with-exponential-backoff on quota / provider errors (429/502/503)
@@ -20,19 +17,17 @@
 // ── Model registry ─────────────────────────────────────────────────────────────
 
 const MODELS = {
-  /** Primary: DeepSeek R1 — strong reasoning, rarely rate-limited */
-  PRIMARY:  "deepseek/deepseek-r1-0528:free",
-  /** Secondary: DeepSeek Chat — fast, good tool use */
-  SECONDARY: "deepseek/deepseek-chat-v3-0324:free",
-  /** Tertiary: Llama 3.3 70B — broadly available */
-  TERTIARY: "meta-llama/llama-3.3-70b-instruct:free",
-  /** Fallback: Mistral 7B — lightweight, rarely overloaded */
-  FALLBACK: "mistralai/mistral-7b-instruct:free",
-  /** Last resort: OpenRouter auto-selects any available free model */
-  AUTO:     "openrouter/free",
+  /** Primary: Llama 3.3 70B — fast, strong reasoning */
+  PRIMARY:  "llama-3.3-70b-versatile",
+  /** Secondary: Llama 3.1 70B — good for complex tasks */
+  SECONDARY: "llama-3.1-70b-versatile",
+  /** Tertiary: Mixtral 8x7b — excellent tool calling */
+  TERTIARY: "mixtral-8x7b-32768",
+  /** Fallback: Gemma2 9B — lightweight, very fast */
+  FALLBACK: "gemma2-9b-it",
 } as const;
 
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const GROQ_BASE = "https://api.groq.com/openai/v1";
 
 type ModelKey = keyof typeof MODELS;
 
@@ -76,17 +71,17 @@ export interface TaxExplanation {
 // ── Client factory ─────────────────────────────────────────────────────────────
 
 function getApiKey(): string {
-  const key = (import.meta.env['VITE_OPENROUTER_API_KEY'] as string | undefined) ?? "";
+  const key = (import.meta.env['VITE_GROQ_API_KEY'] as string | undefined) ?? "";
   if (!key || key.length < 10) {
     throw new Error(
-      "AuditX Intelligence: AI API key not configured. Add VITE_OPENROUTER_API_KEY to your .env file. " +
-      "Get a free key at https://openrouter.ai",
+      "AuditX Intelligence: AI API key not configured. Add VITE_GROQ_API_KEY to your .env file. " +
+      "Get a free key at https://console.groq.com",
     );
   }
   return key;
 }
 
-async function openRouterChat(
+async function groqChat(
   model: string,
   messages: Array<{ role: string; content: string }>,
   opts: { temperature?: number; maxTokens?: number; responseFormat?: "json" } = {},
@@ -102,20 +97,18 @@ async function openRouterChat(
     body["response_format"] = { type: "json_object" };
   }
 
-  const resp = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+  const resp = await fetch(`${GROQ_BASE}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://auditx.app",
-      "X-Title": "AuditX",
     },
     body: JSON.stringify(body),
   });
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => resp.statusText);
-    throw new Error(`OpenRouter ${resp.status}: ${errText}`);
+    throw new Error(`Groq ${resp.status}: ${errText}`);
   }
 
   const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
@@ -194,7 +187,7 @@ interface RunOptions {
 }
 
 async function runWithCascade(opts: RunOptions): Promise<string> {
-  const cascade: ModelKey[] = ["PRIMARY", "SECONDARY", "TERTIARY", "FALLBACK", "AUTO"];
+  const cascade: ModelKey[] = ["PRIMARY", "SECONDARY", "TERTIARY", "FALLBACK"];
 
   for (const modelKey of cascade) {
     const model = MODELS[modelKey];
@@ -211,7 +204,7 @@ async function runWithCascade(opts: RunOptions): Promise<string> {
           { role: "user",   content: opts.userText },
         ];
 
-        const text = await openRouterChat(model, messages, {
+        const text = await groqChat(model, messages, {
           temperature: opts.temperature,
           maxTokens:   opts.maxTokens,
           responseFormat: opts.responseFormat,

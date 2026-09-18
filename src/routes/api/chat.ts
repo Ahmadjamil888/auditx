@@ -7,7 +7,7 @@ import {
   resolveAgentModel,
   getModelCascade,
   isQuotaError,
-  FREE_MODELS,
+  GROQ_MODELS,
 } from "@/lib/audit-agent.server";
 import { computeTax } from "@/lib/tax";
 import { computePortfolioSummary } from "@/lib/financial-intelligence";
@@ -374,10 +374,10 @@ export const Route = createFileRoute("/api/chat")({
               context: z.string(),
             }),
             execute: async ({ agent, objective, context }) => {
-              // Use model cascade for specialist sub-tasks: try each free model
-              // in order until one succeeds, to maximise free-tier availability.
-              const openRouterKey = process.env["OPENROUTER_API_KEY"] ?? "";
-              const cascade = openRouterKey ? getModelCascade(openRouterKey) : [{ id: FREE_MODELS[0], model }];
+              // Use model cascade for specialist sub-tasks: try each model
+              // in order until one succeeds, to maximise availability.
+              const groqKey = process.env["GROQ_API_KEY"] ?? "";
+              const cascade = groqKey ? getModelCascade(groqKey) : [{ id: GROQ_MODELS[0], model }];
               let lastError: unknown;
               for (const { id: modelId, model: cascadeModel } of cascade) {
                 try {
@@ -872,14 +872,48 @@ Rules for the final answer:
 
         if (!result) {
           const errDetail = lastStreamError instanceof Error ? lastStreamError.message : "All free models are currently unavailable.";
-          console.error("[AuditX] All models in cascade failed:", errDetail);
-          return new Response(
-            JSON.stringify({
-              code: "provider_error",
-              message: "AuditX is temporarily unavailable. All AI providers are busy — your financial data was not changed. Please try again in a few minutes.",
-            }),
-            { status: 503, headers: { "Content-Type": "application/json" } },
-          );
+          const errMsg = String(errDetail).toLowerCase();
+          
+          // Check if this is a quota/credit error - if so, rotate API key and retry
+          const isQuotaError = errMsg.includes("quota") || errMsg.includes("credit") || errMsg.includes("402") || errMsg.includes("429");
+          
+          if (isQuotaError) {
+            console.warn("[AuditX] Quota/credit error detected, rotating API key and retrying...");
+            // Import and use the rotation function
+            const { rotateApiKey, resolveAgentModel } = await import("../../lib/audit-agent.server");
+            rotateApiKey();
+            
+            // Retry with the new API key
+            const rotatedModel = await resolveAgentModel((globalThis as any).__VERCEL_ENV__);
+            if (rotatedModel) {
+              console.log("[AuditX] Retrying with rotated API key...");
+              const rotatedCascade = rotatedModel.cascade;
+              
+              for (const { id: rotatedModelId, model: rotatedModelInstance } of rotatedCascade) {
+                try {
+                  console.log(`[AuditX] Trying model ${rotatedModelId} with rotated key...`);
+                  const rotatedResult = streamText({ model: rotatedModelInstance, ...STREAM_OPTS });
+                  result = rotatedResult;
+                  console.log(`[AuditX] Model ${rotatedModelId} accepted with rotated key`);
+                  break;
+                } catch (e) {
+                  console.warn(`[AuditX] Model ${rotatedModelId} also failed with rotated key`);
+                  continue;
+                }
+              }
+            }
+          }
+          
+          if (!result) {
+            console.error("[AuditX] All models in cascade failed (even after key rotation):", errDetail);
+            return new Response(
+              JSON.stringify({
+                code: "provider_error",
+                message: "AuditX is temporarily unavailable. All AI providers are busy — your financial data was not changed. Please try again in a few minutes.",
+              }),
+              { status: 503, headers: { "Content-Type": "application/json" } },
+            );
+          }
         }
 
         return result.toUIMessageStreamResponse({
