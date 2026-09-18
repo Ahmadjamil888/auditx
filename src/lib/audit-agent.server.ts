@@ -78,24 +78,27 @@ function resolveModel(): string {
   return (
     process.env["GROQ_MODEL"] ||
     (import.meta.env as Record<string, string | undefined>)["VITE_GROQ_MODEL"] ||
-    "llama-3.3-70b-versatile"
+    "openai/gpt-oss-20b"
   );
 }
 
-// ── Groq model cascade(all support tool calling) ───────────────────────────
+// ── Groq model cascade (reasoning-capable models) ───────────────────────────
 // Listed best-first. delegate_agent tries each in order on quota/provider errors.
 // Verify availability at https://console.groq.com/docs/models
 //
-//  1. llama-3.3-70b-versatile — Fast, strong reasoning
-//  2. llama-3.1-70b-versatile — Good for complex tasks
-//  3. mixtral-8x7b-32768 — Excellent tool calling
-//  4. gemma2-9b-it — Lightweight, very fast
+// Note: Only reasoning-capable models support reasoning_content property.
+// Non-reasoning models will reject requests with reasoning_content.
+//
+//  1. openai/gpt-oss-20b — Reasoning-capable, cost-effective
+//  2. openai/gpt-oss-120b — Reasoning-capable, larger model
+//  3. qwen/qwen3-32b — Reasoning-capable, good for complex tasks
+//  4. llama-3.3-70b-versatile — Fallback (non-reasoning, but capable)
 
 export const GROQ_MODELS = [
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-120b",
+  "qwen/qwen3-32b",
   "llama-3.3-70b-versatile",
-  "llama-3.1-70b-versatile",
-  "mixtral-8x7b-32768",
-  "gemma2-9b-it",
 ] as const;
 
 export type GroqModel = (typeof GROQ_MODELS)[number];
@@ -109,7 +112,6 @@ export function createGroqProvider(apiKey: string) {
     headers: {
       "Authorization": `Bearer ${apiKey}`,
     },
-    compatibility: "strict", // Use strict compatibility to avoid unsupported properties like reasoning_content
   });
 }
 
