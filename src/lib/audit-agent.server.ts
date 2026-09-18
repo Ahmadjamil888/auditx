@@ -109,6 +109,7 @@ export function createGroqProvider(apiKey: string) {
     headers: {
       "Authorization": `Bearer ${apiKey}`,
     },
+    compatibility: "strict", // Use strict compatibility to avoid unsupported properties like reasoning_content
   });
 }
 
