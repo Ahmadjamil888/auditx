@@ -28,7 +28,6 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { useAIContext } from "@/lib/financial-intelligence-hooks";
 import { detectIntent, buildIntelligencePrompt, getPortfolioSummary, getTaxLiability, getUnreconciledTransactions, getCriticalAnomalies, getFinancialHealth, type IntelligenceToolContext } from "@/lib/intelligence-tools";
-import { streamCompletion, isKeyMissing } from "@/lib/groq-client";
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
 
@@ -197,13 +196,47 @@ export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
         });
 
         setLoadingState(null);
-        for await (const chunk of streamCompletion({
-          systemPrompt: "You are AuditX Intelligence, a financial audit assistant. Be concise, precise, and reference specific numbers from the data provided. Never invent figures.",
-          userPrompt: finalPrompt,
-          maxTokens: 1024,
-          temperature: 0.3,
-        })) {
-          setAIResponse((prev) => prev + chunk);
+        // Use server-side API instead of client-side Groq call
+        const response = await fetch("/api/intelligence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemPrompt: "You are AuditX Intelligence, a financial audit assistant. Be concise, precise, and reference specific numbers from the data provided. Never invent figures.",
+            userPrompt: finalPrompt,
+            maxTokens: 1024,
+            temperature: 0.3,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        // Stream the response
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.content) {
+                    setAIResponse((prev) => prev + data.content);
+                  }
+                } catch {
+                  // Skip invalid JSON
+                }
+              }
+            }
+          }
         }
       } catch (err) {
         setAIResponse(`Unable to complete analysis: ${(err as Error).message}`);

@@ -28,7 +28,6 @@ import {
   getFinancialHealth,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
-import { streamCompletion, isKeyMissing } from "@/lib/groq-client";
 
 // ── Context-aware suggestions ─────────────────────────────────────────────────
 
@@ -139,12 +138,6 @@ export function ContextualIntelligencePanel({ currentPage, entityId, isOpen = tr
     async (prompt: string) => {
       if (!profile?.org_id) return;
 
-      if (isKeyMissing()) {
-        setResponse("Add VITE_OPENROUTER_API_KEY to your environment variables to enable AI.");
-        setHasResponse(true);
-        return;
-      }
-
       setIsStreaming(true);
       setHasResponse(true);
       setResponse("");
@@ -184,18 +177,52 @@ export function ContextualIntelligencePanel({ currentPage, entityId, isOpen = tr
         const finalPrompt = buildIntelligencePrompt(prompt, intent, toolResults, {
           jurisdiction: toolCtx.jurisdiction,
           currentPage,
-          transactionId: entityId,
+          ...(entityId && { transactionId: entityId }),
           taxYear: toolCtx.taxYear,
         });
 
         setLoadingState(null);
-        for await (const chunk of streamCompletion({
-          systemPrompt: "You are AuditX Intelligence. Provide concise, evidence-based financial analysis. Only use numbers from the data provided.",
-          userPrompt: finalPrompt,
-          maxTokens: 512,
-          temperature: 0.3,
-        })) {
-          setResponse((prev) => prev + chunk);
+        // Use server-side API instead of client-side Groq call
+        const response = await fetch("/api/intelligence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemPrompt: "You are AuditX Intelligence. Provide concise, evidence-based financial analysis. Only use numbers from the data provided.",
+            userPrompt: finalPrompt,
+            maxTokens: 512,
+            temperature: 0.3,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        // Stream the response
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.content) {
+                    setResponse((prev) => prev + data.content);
+                  }
+                } catch {
+                  // Skip invalid JSON
+                }
+              }
+            }
+          }
         }
       } catch (err) {
         setResponse(`Analysis error: ${(err as Error).message}`);

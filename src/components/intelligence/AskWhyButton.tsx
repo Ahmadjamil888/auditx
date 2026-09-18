@@ -14,7 +14,6 @@ import {
   detectIntent,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
-import { streamCompletion, isKeyMissing } from "@/lib/groq-client";
 
 export interface AskWhyContext {
   metric: string;
@@ -82,14 +81,49 @@ export function AskWhyButton({ context, className }: Props) {
         taxYear: toolCtx.taxYear,
       });
 
-      for await (const chunk of streamCompletion({
-        systemPrompt: "You are AuditX Intelligence. Explain financial metrics clearly and concisely. Only reference numbers from the provided data.",
-        userPrompt: finalPrompt,
-        maxTokens: 400,
-        temperature: 0.3,
-      })) {
-        setResponse((prev) => prev + chunk);
+      // Use server-side API instead of client-side Groq call
+      const response = await fetch("/api/intelligence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: "You are AuditX Intelligence. Explain financial metrics clearly and concisely. Only reference numbers from the provided data.",
+          userPrompt: finalPrompt,
+          maxTokens: 400,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
+
+      // Stream the response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.content) {
+                  setResponse((prev) => prev + data.content);
+                }
+              } catch {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
+      }
+
       setHasLoaded(true);
     } catch (err) {
       setResponse(`Unable to explain: ${(err as Error).message}`);
