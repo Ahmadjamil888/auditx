@@ -15,7 +15,7 @@
 // API KEY RESOLUTION:
 //   GROQ_API_KEY from environment variables (server-side only)
 
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createGroq } from "@ai-sdk/groq";
 import type { LanguageModel as LanguageModelV1 } from "ai";
 
 // ── Groq base URL ───────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ function resolveApiKey(env?: Record<string, unknown>, requestedIndex?: number): 
   const keyName = API_KEY_NAMES[keyIndex % API_KEY_NAMES.length];
 
   // First check the passed env object (for serverless/Vercel)
-  if (env) {
+  if (env && keyName) {
     const fromEnv = env[keyName] as string | undefined;
     console.log(`[AuditX] env.${keyName}:`, fromEnv ? `exists (length: ${fromEnv.length})` : "undefined");
     if (fromEnv && fromEnv.length >= 10) {
@@ -42,10 +42,12 @@ function resolveApiKey(env?: Record<string, unknown>, requestedIndex?: number): 
   }
 
   // process.env works on Node/Vercel/Cloudflare Workers
-  const fromProcess = process.env[keyName];
-  console.log(`[AuditX] process.env.${keyName}:`, fromProcess ? `exists (length: ${fromProcess.length})` : "undefined");
-  if (fromProcess && fromProcess.length >= 10) {
-    return fromProcess;
+  if (keyName) {
+    const fromProcess = process.env[keyName];
+    console.log(`[AuditX] process.env.${keyName}:`, fromProcess ? `exists (length: ${fromProcess.length})` : "undefined");
+    if (fromProcess && fromProcess.length >= 10) {
+      return fromProcess;
+    }
   }
 
   // Try fallback key if primary is missing
@@ -64,12 +66,13 @@ function resolveApiKey(env?: Record<string, unknown>, requestedIndex?: number): 
 // Rotate to the next API key
 export function rotateApiKey(): void {
   currentKeyIndex = (currentKeyIndex + 1) % API_KEY_NAMES.length;
-  console.log(`[AuditX] Rotating to ${API_KEY_NAMES[currentKeyIndex]}`);
+  const keyName = API_KEY_NAMES[currentKeyIndex];
+  console.log(`[AuditX] Rotating to ${keyName}`);
 }
 
 // Get current API key name for logging
 export function getCurrentKeyName(): string {
-  return API_KEY_NAMES[currentKeyIndex];
+  return API_KEY_NAMES[currentKeyIndex] ?? "unknown";
 }
 
 // ── Resolve the model from environment ──────────────────────────────
@@ -106,12 +109,8 @@ export type GroqModel = (typeof GROQ_MODELS)[number];
 // ── Provider factory ──────────────────────────────────────────────────────────
 
 export function createGroqProvider(apiKey: string) {
-  return createOpenAICompatible({
-    name: "groq",
-    baseURL: GROQ_BASE,
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-    },
+  return createGroq({
+    apiKey,
   });
 }
 

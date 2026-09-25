@@ -744,12 +744,22 @@ export const Route = createFileRoute("/api/chat")({
         };
 
         const uiMessages = body.messages as UIMessage[];
-        const latestUser = [...uiMessages].reverse().find((message) => message.role === "user");
-        const latestText = latestUser?.parts.filter((part) => part.type === "text").map((part) => part.text).join(" ") ?? "";
-        const title = text(latestText).slice(0, 64) || "Document audit";
+        const modelMessages = convertToModelMessages(uiMessages);
 
-        // ── Model cascade for the main orchestrator stream ────────────────────
-        // streamText itself doesn't retry — we must wrap it in a loop that
+        // Sanitize messages to remove reasoning_content which Groq doesn't support
+        const cleanedMessages = modelMessages.map((message) => {
+          if (message.role !== "assistant") {
+            return message;
+          }
+
+          return {
+            ...message,
+            content: Array.isArray(message.content)
+              ? message.content.filter((part) => part.type !== "reasoning")
+              : message.content,
+          };
+        });
+
         // tries the next free model whenever a provider/quota error is thrown
         // during the initial connection (before any bytes are streamed).
 
@@ -819,7 +829,7 @@ Rules for the final answer:
 
         const STREAM_OPTS = {
           system: SYSTEM_PROMPT,
-          messages: convertedMessages,
+          messages: cleanedMessages,
           tools,
           toolApproval: {
             insert_transaction: "user-approval" as const,
