@@ -726,6 +726,9 @@ export const Route = createFileRoute("/api/chat")({
         };
 
         const uiMessages = body.messages as UIMessage[];
+        const lastUser = [...uiMessages].reverse().find((m) => m.role === "user");
+        const latestText = (lastUser?.parts ?? []).map((p) => (p.type === "text" ? p.text : "")).join(" ");
+        const title = text(latestText).slice(0, 64) || "Document audit";
         const modelMessages = await convertToModelMessages(uiMessages);
 
         // Sanitize messages to remove reasoning_content which Groq doesn't support
