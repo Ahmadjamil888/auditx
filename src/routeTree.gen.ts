@@ -23,6 +23,7 @@ import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiIntelligenceRouteImport } from './routes/api/intelligence'
+import { Route as ApiSheetsImportRouteImport } from './routes/api/sheets-import'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentRouteImport } from './routes/app.agent'
 import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
@@ -108,6 +109,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
 const ApiIntelligenceRoute = ApiIntelligenceRouteImport.update({
   id: '/api/intelligence',
   path: '/api/intelligence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSheetsImportRoute = ApiSheetsImportRouteImport.update({
+  id: '/api/sheets-import',
+  path: '/api/sheets-import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -206,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/api/chat': typeof ApiChatRoute
   '/api/intelligence': typeof ApiIntelligenceRoute
+  '/api/sheets-import': typeof ApiSheetsImportRoute
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
@@ -237,6 +244,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/api/chat': typeof ApiChatRoute
   '/api/intelligence': typeof ApiIntelligenceRoute
+  '/api/sheets-import': typeof ApiSheetsImportRoute
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/api/chat': typeof ApiChatRoute
   '/api/intelligence': typeof ApiIntelligenceRoute
+  '/api/sheets-import': typeof ApiSheetsImportRoute
   '/app/agent': typeof AppAgentRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/api/chat'
     | '/api/intelligence'
+    | '/api/sheets-import'
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
@@ -334,6 +344,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/api/chat'
     | '/api/intelligence'
+    | '/api/sheets-import'
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
@@ -365,6 +376,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/api/chat'
     | '/api/intelligence'
+    | '/api/sheets-import'
     | '/app/agent'
     | '/app/audit-trail'
     | '/app/billing'
@@ -398,6 +410,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiIntelligenceRoute: typeof ApiIntelligenceRoute
+  ApiSheetsImportRoute: typeof ApiSheetsImportRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -498,6 +511,13 @@ declare module '@tanstack/react-router' {
       path: '/api/intelligence'
       fullPath: '/api/intelligence'
       preLoaderRoute: typeof ApiIntelligenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sheets-import': {
+      id: '/api/sheets-import'
+      path: '/api/sheets-import'
+      fullPath: '/api/sheets-import'
+      preLoaderRoute: typeof ApiSheetsImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -680,6 +700,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   ApiChatRoute: ApiChatRoute,
   ApiIntelligenceRoute: ApiIntelligenceRoute,
+  ApiSheetsImportRoute: ApiSheetsImportRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
