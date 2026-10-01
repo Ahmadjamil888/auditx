@@ -12,7 +12,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@ai-sdk/groq": "^4.0.48",
+    "@ai-sdk/openai": "^4.0.78",
     "@ai-sdk/openai-compatible": "^3.0.27",
     "@ai-sdk/react": "^4.0.61",
     "@google/genai": "^2.16.0",
@@ -81,11 +81,12 @@
     "use-stick-to-bottom": "^1.1.6",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "2.13.1",
+    "@lovable.dev/vite-tanstack-config": "2.23.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

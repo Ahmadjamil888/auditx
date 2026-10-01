@@ -1,14 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { convertToModelMessages, generateText, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/lib/database.types";
-import {
-  resolveAgentModel,
-  getModelCascade,
-  isQuotaError,
-  GROQ_MODELS,
-} from "@/lib/audit-agent.server";
+import { resolveAgentModel, AI_PROVIDER_OPTIONS } from "@/lib/audit-agent.server";
 import { computeTax } from "@/lib/tax";
 import { computePortfolioSummary } from "@/lib/financial-intelligence";
 import type { Transaction } from "@/lib/demo-data";
@@ -241,7 +236,7 @@ export const Route = createFileRoute("/api/chat")({
               code: "ai_not_configured",
               message:
                 "AI features are not configured. " +
-                "Add OPENROUTER_API_KEY to your .env file to enable AI chat.",
+                "Enable Lovable AI for this project.",
             }),
             { status: 503, headers: { "Content-Type": "application/json" } },
           );
@@ -374,27 +369,14 @@ export const Route = createFileRoute("/api/chat")({
               context: z.string(),
             }),
             execute: async ({ agent, objective, context }) => {
-              // Use model cascade for specialist sub-tasks: try each model
-              // in order until one succeeds, to maximise availability.
-              const groqKey = process.env["GROQ_API_KEY"] ?? "";
-              const cascade = groqKey ? getModelCascade(groqKey) : [{ id: GROQ_MODELS[0], model }];
-              let lastError: unknown;
-              for (const { id: modelId, model: cascadeModel } of cascade) {
-                try {
-                  const { text: findings } = await generateText({
-                    model: cascadeModel,
-                    maxOutputTokens: 1000,
-                    system: `${SPECIALISTS[agent]}\n\nReturn compact markdown: findings, figures, evidence references, and a confidence rating (high/medium/low). Never expose hidden reasoning.`,
-                    prompt: `Objective:\n${objective}\n\nData and context:\n${context.slice(0, 40000)}`,
-                  });
-                  return { agent, findings, model_used: modelId };
-                } catch (e) {
-                  lastError = e;
-                  if (!isQuotaError(e)) throw e; // non-quota errors should bubble up
-                  console.warn(`[AuditX delegate_agent] Quota on ${modelId}, trying next…`);
-                }
-              }
-              throw lastError ?? new Error("All free models quota-exhausted for specialist task.");
+              const sub = streamText({
+                model,
+                providerOptions: AI_PROVIDER_OPTIONS as never,
+                system: `${SPECIALISTS[agent]}\n\nReturn compact markdown (under 400 words): findings, figures, evidence references, and a confidence rating (high/medium/low). Never expose hidden reasoning.`,
+                prompt: `Objective:\n${objective}\n\nData and context:\n${context.slice(0, 40000)}`,
+              });
+              const findings = await sub.text;
+              return { agent, findings, model_used: resolved.modelId };
             },
           }),
           calculate: tool({
@@ -744,7 +726,10 @@ export const Route = createFileRoute("/api/chat")({
         };
 
         const uiMessages = body.messages as UIMessage[];
-        const modelMessages = convertToModelMessages(uiMessages);
+        const lastUser = [...uiMessages].reverse().find((m) => m.role === "user");
+        const latestText = (lastUser?.parts ?? []).map((p) => (p.type === "text" ? p.text : "")).join(" ");
+        const title = text(latestText).slice(0, 64) || "Document audit";
+        const modelMessages = await convertToModelMessages(uiMessages);
 
         // Sanitize messages to remove reasoning_content which Groq doesn't support
         const cleanedMessages = modelMessages.map((message) => {
@@ -840,94 +825,20 @@ Rules for the final answer:
           },
           experimental_toolApprovalSecret: approvalSecret,
           stopWhen: stepCountIs(50),
-          maxOutputTokens: 2000,
+          providerOptions: AI_PROVIDER_OPTIONS as never,
         };
 
-        // Try each model in the cascade until one accepts the request.
-        // Errors thrown *before* streaming starts (404 model gone, 402 credits,
-        // 429 rate limit, 502/503 overload) are all retriable.
-        let result: ReturnType<typeof streamText> | null = null;
-        let lastStreamError: unknown = null;
-
-        for (const { id: cascadeModelId, model: cascadeModel } of modelCascade) {
-          try {
-            console.log(`[AuditX] Trying model: ${cascadeModelId}`);
-            const candidate = streamText({ model: cascadeModel, ...STREAM_OPTS });
-            // In AI SDK v7, we can't peek at the stream without consuming it.
-            // Instead, we'll use the stream directly and handle errors in the catch block.
-            result = candidate;
-            console.log(`[AuditX] Model accepted: ${cascadeModelId}`);
-            break;
-          } catch (e) {
-            lastStreamError = e;
-            const errMsg = String((e as Error)?.message ?? "").toLowerCase();
-            const status  = (e as { status?: number })?.status ?? 0;
-            const isSkippable =
-              status === 402 || status === 404 || status === 429 ||
-              status === 502 || status === 503 ||
-              errMsg.includes("unavailable") || errMsg.includes("credits") ||
-              errMsg.includes("quota") || errMsg.includes("rate limit") ||
-              errMsg.includes("overloaded") || errMsg.includes("not found") ||
-              errMsg.includes("free tier") || errMsg.includes("requires more");
-
-            if (isSkippable) {
-              console.warn(`[AuditX] Model ${cascadeModelId} skipped (${status || errMsg.slice(0, 80)}), trying next…`);
-              result = null;
-              continue;
-            }
-            // Non-retriable error — surface immediately
-            throw e;
-          }
-        }
-
-        if (!result) {
-          const errDetail = lastStreamError instanceof Error ? lastStreamError.message : "All free models are currently unavailable.";
-          const errMsg = String(errDetail).toLowerCase();
-          
-          // Check if this is a quota/credit error - if so, rotate API key and retry
-          const isQuotaError = errMsg.includes("quota") || errMsg.includes("credit") || errMsg.includes("402") || errMsg.includes("429");
-          
-          if (isQuotaError) {
-            console.warn("[AuditX] Quota/credit error detected, rotating API key and retrying...");
-            // Import and use the rotation function
-            const { rotateApiKey, resolveAgentModel } = await import("../../lib/audit-agent.server");
-            rotateApiKey();
-            
-            // Retry with the new API key
-            const rotatedModel = await resolveAgentModel((globalThis as any).__VERCEL_ENV__);
-            if (rotatedModel) {
-              console.log("[AuditX] Retrying with rotated API key...");
-              const rotatedCascade = rotatedModel.cascade;
-              
-              for (const { id: rotatedModelId, model: rotatedModelInstance } of rotatedCascade) {
-                try {
-                  console.log(`[AuditX] Trying model ${rotatedModelId} with rotated key...`);
-                  const rotatedResult = streamText({ model: rotatedModelInstance, ...STREAM_OPTS });
-                  result = rotatedResult;
-                  console.log(`[AuditX] Model ${rotatedModelId} accepted with rotated key`);
-                  break;
-                } catch (e) {
-                  console.warn(`[AuditX] Model ${rotatedModelId} also failed with rotated key`);
-                  continue;
-                }
-              }
-            }
-          }
-          
-          if (!result) {
-            console.error("[AuditX] All models in cascade failed (even after key rotation):", errDetail);
-            return new Response(
-              JSON.stringify({
-                code: "provider_error",
-                message: "AuditX is temporarily unavailable. All AI providers are busy — your financial data was not changed. Please try again in a few minutes.",
-              }),
-              { status: 503, headers: { "Content-Type": "application/json" } },
-            );
-          }
-        }
-
+        const result = streamText({ model, ...STREAM_OPTS, abortSignal: request.signal });
         return result.toUIMessageStreamResponse({
+          sendReasoning: true,
           originalMessages: uiMessages,
+          onError: (e) => {
+            console.error("[AuditX] AI stream error", e);
+            const st = (e as { statusCode?: number })?.statusCode;
+            if (st === 402) return "AI credits are used up. Add credits in your workspace settings to continue.";
+            if (st === 429) return "AuditX AI is busy right now. Please try again in a moment.";
+            return "AuditX AI hit an error. Your data was not changed — please try again.";
+          },
           onFinish: async ({ messages }) => {
             // Deduplicate by ai_message_id — keep the last occurrence of each
             // (the full message array re-sends history on every turn, so the

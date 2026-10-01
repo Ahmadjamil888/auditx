@@ -725,11 +725,26 @@ function ImportPanel({
   const [status, setStatus] = useState<"idle" | "parsing" | "review" | "saving" | "done">("idle");
   const [parsed, setParsed] = useState<(TransactionInput & { _raw?: string })[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [sheetUrl, setSheetUrl] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function addSheet() {
+    setError(null);
+    const res = await fetch("/api/sheets-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sheetUrl.trim() }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { csv?: string; error?: string };
+    if (!res.ok || !json.csv) return setError(json.error ?? "Couldn't import that sheet.");
+    addFiles([new File([json.csv], "google-sheet.csv", { type: "text/csv" })]);
+    setSheetUrl("");
+    toast.success("Google Sheet added");
+  }
   const createTx = useCreateTransaction();
   const { profile } = useAuth();
 
-  const accept = ".csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.txt";
+  const accept = ".csv,.xlsx,.xls,.txt";
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
@@ -751,86 +766,26 @@ function ImportPanel({
     setError(null);
 
     try {
-      const apiKey = import.meta.env["VITE_OPENROUTER_API_KEY"] as string | undefined;
-      if (!apiKey) {
-        throw new Error(
-          "VITE_OPENROUTER_API_KEY is not set. Add it to .env to enable AI file parsing.",
-        );
-      }
-
       const results: (TransactionInput & { _raw?: string })[] = [];
-
-      const IMPORT_MODELS = [
-        "deepseek/deepseek-r1-0528:free",
-        "deepseek/deepseek-chat-v3-0324:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "openrouter/free",
-      ];
+      const { complete } = await import("@/lib/groq-client");
 
       for (const file of files) {
-        const isText =
-          file.type.includes("text") ||
-          file.type.includes("csv") ||
-          file.name.endsWith(".csv") ||
-          file.name.endsWith(".txt");
-
+        const lower = file.name.toLowerCase();
         let content = "";
-
-        if (isText) {
+        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+          const XLSX = await import("xlsx");
+          const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+          content = wb.SheetNames.map((n) => `# Sheet: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n]!)).join("\n\n");
+        } else if (file.type.includes("text") || file.type.includes("csv") || lower.endsWith(".csv") || lower.endsWith(".txt")) {
           content = await file.text();
         } else {
-          // Base64 encode for vision models
-          const reader = new FileReader();
-          content = await new Promise<string>((res, rej) => {
-            reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
-            reader.onerror = rej;
-            reader.readAsDataURL(file);
-          });
+          throw new Error(`${file.name}: PDFs and images are read in the AuditX chat — drop them there instead.`);
         }
 
-        const prompt = isText
-          ? `Extract ALL transactions from this financial document as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange. Return ONLY a JSON array.\n\n${content.slice(0, 30000)}`
-          : `Extract ALL transactions from this broker statement image/PDF as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange. Return ONLY a JSON array. Image base64: data:${file.type};base64,${content.slice(0, 5000)}`;
-
-        let raw = "[]";
-        let lastParseErr: Error | null = null;
-        for (const modelId of IMPORT_MODELS) {
-          try {
-            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://auditx-beta.vercel.app",
-                "X-Title": "AuditX Import",
-              },
-              body: JSON.stringify({
-                model: modelId,
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0,
-              }),
-            });
-
-            if (res.status === 429 || res.status === 502 || res.status === 503) {
-              console.warn(`[AuditX import] Provider error ${res.status} on ${modelId}, trying next…`);
-              continue;
-            }
-            if (!res.ok) throw new Error(`AI parsing failed (${res.status})`);
-
-            const json = (await res.json()) as {
-              choices?: { message?: { content?: string } }[];
-            };
-            raw = json.choices?.[0]?.message?.content ?? "[]";
-            lastParseErr = null;
-            break;
-          } catch (err) {
-            lastParseErr = err instanceof Error ? err : new Error(String(err));
-            console.warn(`[AuditX import] Error on ${modelId}:`, lastParseErr.message);
-          }
-        }
-
-        if (lastParseErr) throw lastParseErr;
+        const raw = await complete({
+          systemPrompt: "You extract brokerage transactions. Reply with ONLY a JSON array, no prose.",
+          userPrompt: `Extract ALL transactions from this financial document as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange.\n\n${content.slice(0, 50000)}`,
+        });
 
         // Strip markdown fences
         const clean = raw.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
@@ -957,7 +912,7 @@ function ImportPanel({
                   <span style={{ color: "var(--color-accent)" }}>browse</span>
                 </p>
                 <p className="mt-1 text-xs" style={{ color: "var(--ink-3)" }}>
-                  CSV, Excel, PDF, image, or plain text. Multiple files supported.
+                  CSV, Excel (.xlsx) or text files. PDFs and images go in the AuditX chat.
                 </p>
                 <input
                   ref={inputRef}
@@ -967,6 +922,26 @@ function ImportPanel({
                   className="hidden"
                   onChange={(e) => e.target.files && addFiles(e.target.files)}
                 />
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  placeholder="Or paste a Google Sheets link (shared: anyone with the link)"
+                  aria-label="Google Sheets link"
+                  className="flex-1 rounded-full border px-3.5 py-2 text-xs outline-none"
+                  style={{ borderColor: "var(--hairline)" }}
+                />
+                <button
+                  type="button"
+                  onClick={addSheet}
+                  disabled={!sheetUrl.trim()}
+                  className="rounded-full border px-3.5 py-2 text-xs font-medium disabled:opacity-50"
+                  style={{ borderColor: "var(--hairline)" }}
+                >
+                  Add sheet
+                </button>
               </div>
 
               {files.length > 0 && (
@@ -1214,6 +1189,20 @@ function Ledger() {
     toast.success("Ledger exported as CSV");
   }
 
+  async function exportXLSX() {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(
+      sorted.map((t) => ({
+        Ticker: t.ticker, Action: t.action, Quantity: t.quantity, Price: t.price, Fees: t.fees, WHT: t.wht,
+        "Trade date": t.trade_date, Reference: t.ref_id, Broker: t.broker, Exchange: t.exchange, Status: t.status,
+      })),
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+    XLSX.writeFile(wb, `auditx-ledger-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Ledger exported for Excel / Google Sheets");
+  }
+
   // Add transaction
   async function handleAdd(values: TransactionInput & { notes?: string }) {
     if (!orgId) return;
@@ -1310,6 +1299,16 @@ function Ledger() {
           >
             <Download size={14} strokeWidth={1.75} style={{ color: "var(--ink-2)" }} />
             <span className="hidden sm:inline">Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={exportXLSX}
+            className="flex items-center gap-2 rounded-full border bg-white px-3.5 py-2 text-xs font-medium transition-shadow hover:shadow-md"
+            style={{ borderColor: "var(--hairline)" }}
+          >
+            <Download size={14} strokeWidth={1.75} style={{ color: "var(--ink-2)" }} />
+            <span className="hidden sm:inline">Excel</span>
           </button>
 
           {/* Add transaction */}
