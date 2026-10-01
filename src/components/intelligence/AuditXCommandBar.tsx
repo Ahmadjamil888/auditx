@@ -131,12 +131,6 @@ export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
     async (prompt: string) => {
       if (!profile?.org_id) return;
 
-      if (isKeyMissing()) {
-        setAIResponse("AI is not configured. Add VITE_OPENROUTER_API_KEY to your environment variables.");
-        setHasResponse(true);
-        return;
-      }
-
       setIsStreaming(true);
       setHasResponse(true);
       setAIResponse("");
@@ -222,20 +216,7 @@ export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  if (data.content) {
-                    setAIResponse((prev) => prev + data.content);
-                  }
-                } catch {
-                  // Skip invalid JSON
-                }
-              }
-            }
+            if (chunk) setAIResponse((prev) => prev + chunk);
           }
         }
       } catch (err) {

@@ -726,7 +726,7 @@ export const Route = createFileRoute("/api/chat")({
         };
 
         const uiMessages = body.messages as UIMessage[];
-        const modelMessages = convertToModelMessages(uiMessages);
+        const modelMessages = await convertToModelMessages(uiMessages);
 
         // Sanitize messages to remove reasoning_content which Groq doesn't support
         const cleanedMessages = modelMessages.map((message) => {

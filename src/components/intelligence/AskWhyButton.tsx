@@ -39,12 +39,6 @@ export function AskWhyButton({ context, className }: Props) {
   const load = useCallback(async () => {
     if (!profile?.org_id || hasLoaded) return;
 
-    if (isKeyMissing()) {
-      setResponse("Add VITE_OPENROUTER_API_KEY to your environment variables to enable explanations.");
-      setHasLoaded(true);
-      return;
-    }
-
     setIsStreaming(true);
 
     const toolCtx: IntelligenceToolContext = {
@@ -107,20 +101,7 @@ export function AskWhyButton({ context, className }: Props) {
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.content) {
-                  setResponse((prev) => prev + data.content);
-                }
-              } catch {
-                // Skip invalid JSON
-              }
-            }
-          }
+          if (chunk) setResponse((prev) => prev + chunk);
         }
       }
 
