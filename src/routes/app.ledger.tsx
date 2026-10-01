@@ -744,7 +744,7 @@ function ImportPanel({
   const createTx = useCreateTransaction();
   const { profile } = useAuth();
 
-  const accept = ".csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg,.webp,.txt";
+  const accept = ".csv,.xlsx,.xls,.txt";
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
@@ -912,7 +912,7 @@ function ImportPanel({
                   <span style={{ color: "var(--color-accent)" }}>browse</span>
                 </p>
                 <p className="mt-1 text-xs" style={{ color: "var(--ink-3)" }}>
-                  CSV, Excel, PDF, image, or plain text. Multiple files supported.
+                  CSV, Excel (.xlsx) or text files. PDFs and images go in the AuditX chat.
                 </p>
                 <input
                   ref={inputRef}
@@ -922,6 +922,26 @@ function ImportPanel({
                   className="hidden"
                   onChange={(e) => e.target.files && addFiles(e.target.files)}
                 />
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  placeholder="Or paste a Google Sheets link (shared: anyone with the link)"
+                  aria-label="Google Sheets link"
+                  className="flex-1 rounded-full border px-3.5 py-2 text-xs outline-none"
+                  style={{ borderColor: "var(--hairline)" }}
+                />
+                <button
+                  type="button"
+                  onClick={addSheet}
+                  disabled={!sheetUrl.trim()}
+                  className="rounded-full border px-3.5 py-2 text-xs font-medium disabled:opacity-50"
+                  style={{ borderColor: "var(--hairline)" }}
+                >
+                  Add sheet
+                </button>
               </div>
 
               {files.length > 0 && (
@@ -1169,6 +1189,20 @@ function Ledger() {
     toast.success("Ledger exported as CSV");
   }
 
+  async function exportXLSX() {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(
+      sorted.map((t) => ({
+        Ticker: t.ticker, Action: t.action, Quantity: t.quantity, Price: t.price, Fees: t.fees, WHT: t.wht,
+        "Trade date": t.trade_date, Reference: t.ref_id, Broker: t.broker, Exchange: t.exchange, Status: t.status,
+      })),
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+    XLSX.writeFile(wb, `auditx-ledger-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Ledger exported for Excel / Google Sheets");
+  }
+
   // Add transaction
   async function handleAdd(values: TransactionInput & { notes?: string }) {
     if (!orgId) return;
@@ -1265,6 +1299,16 @@ function Ledger() {
           >
             <Download size={14} strokeWidth={1.75} style={{ color: "var(--ink-2)" }} />
             <span className="hidden sm:inline">Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={exportXLSX}
+            className="flex items-center gap-2 rounded-full border bg-white px-3.5 py-2 text-xs font-medium transition-shadow hover:shadow-md"
+            style={{ borderColor: "var(--hairline)" }}
+          >
+            <Download size={14} strokeWidth={1.75} style={{ color: "var(--ink-2)" }} />
+            <span className="hidden sm:inline">Excel</span>
           </button>
 
           {/* Add transaction */}
