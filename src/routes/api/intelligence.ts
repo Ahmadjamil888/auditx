@@ -2,46 +2,25 @@ import { createFileRoute } from "@tanstack/react-router";
 import { streamText } from "ai";
 
 export const Route = createFileRoute("/api/intelligence")({
-  loader: () => ({ message: "Intelligence API" }),
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const body = (await request.json().catch(() => ({}))) as { systemPrompt?: string; userPrompt?: string };
+        if (!body.systemPrompt || !body.userPrompt) {
+          return Response.json({ error: "systemPrompt and userPrompt are required" }, { status: 400 });
+        }
+        const { resolveAgentModel, AI_PROVIDER_OPTIONS } = await import("@/lib/audit-agent.server");
+        const resolved = await resolveAgentModel();
+        if (!resolved) return Response.json({ error: "AI not configured" }, { status: 503 });
+        const result = streamText({
+          model: resolved.model,
+          providerOptions: AI_PROVIDER_OPTIONS as never,
+          system: body.systemPrompt,
+          prompt: body.userPrompt.slice(0, 60000),
+          abortSignal: request.signal,
+        });
+        return result.toTextStreamResponse({ headers: { "Cache-Control": "no-cache, no-transform" } });
+      },
+    },
+  },
 });
-
-export async function POST({ request }: { request: Request }) {
-  const body = await request.json();
-  const { systemPrompt, userPrompt, maxTokens = 1024, temperature = 0.3 } = body;
-
-  if (!systemPrompt || !userPrompt) {
-    return new Response(
-      JSON.stringify({ error: "systemPrompt and userPrompt are required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  try {
-    const { resolveAgentModel } = await import("@/lib/audit-agent.server");
-    const env = (globalThis as any).__VERCEL_ENV__;
-    const resolved = await resolveAgentModel(env);
-
-    if (!resolved) {
-      return new Response(
-        JSON.stringify({ error: "AI not configured" }),
-        { status: 503, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    const result = streamText({
-      model: resolved.model,
-      system: systemPrompt,
-      prompt: userPrompt,
-      maxTokens,
-      temperature,
-    });
-
-    return result.toDataStreamResponse();
-  } catch (error) {
-    console.error("[AuditX Intelligence] Error:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to process request" }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
-  }
-}
