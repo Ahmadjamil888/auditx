@@ -725,7 +725,22 @@ function ImportPanel({
   const [status, setStatus] = useState<"idle" | "parsing" | "review" | "saving" | "done">("idle");
   const [parsed, setParsed] = useState<(TransactionInput & { _raw?: string })[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [sheetUrl, setSheetUrl] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function addSheet() {
+    setError(null);
+    const res = await fetch("/api/sheets-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sheetUrl.trim() }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { csv?: string; error?: string };
+    if (!res.ok || !json.csv) return setError(json.error ?? "Couldn't import that sheet.");
+    addFiles([new File([json.csv], "google-sheet.csv", { type: "text/csv" })]);
+    setSheetUrl("");
+    toast.success("Google Sheet added");
+  }
   const createTx = useCreateTransaction();
   const { profile } = useAuth();
 
@@ -751,86 +766,26 @@ function ImportPanel({
     setError(null);
 
     try {
-      const apiKey = import.meta.env["VITE_OPENROUTER_API_KEY"] as string | undefined;
-      if (!apiKey) {
-        throw new Error(
-          "VITE_OPENROUTER_API_KEY is not set. Add it to .env to enable AI file parsing.",
-        );
-      }
-
       const results: (TransactionInput & { _raw?: string })[] = [];
-
-      const IMPORT_MODELS = [
-        "deepseek/deepseek-r1-0528:free",
-        "deepseek/deepseek-chat-v3-0324:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "openrouter/free",
-      ];
+      const { complete } = await import("@/lib/groq-client");
 
       for (const file of files) {
-        const isText =
-          file.type.includes("text") ||
-          file.type.includes("csv") ||
-          file.name.endsWith(".csv") ||
-          file.name.endsWith(".txt");
-
+        const lower = file.name.toLowerCase();
         let content = "";
-
-        if (isText) {
+        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+          const XLSX = await import("xlsx");
+          const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+          content = wb.SheetNames.map((n) => `# Sheet: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n]!)).join("\n\n");
+        } else if (file.type.includes("text") || file.type.includes("csv") || lower.endsWith(".csv") || lower.endsWith(".txt")) {
           content = await file.text();
         } else {
-          // Base64 encode for vision models
-          const reader = new FileReader();
-          content = await new Promise<string>((res, rej) => {
-            reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
-            reader.onerror = rej;
-            reader.readAsDataURL(file);
-          });
+          throw new Error(`${file.name}: PDFs and images are read in the AuditX chat — drop them there instead.`);
         }
 
-        const prompt = isText
-          ? `Extract ALL transactions from this financial document as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange. Return ONLY a JSON array.\n\n${content.slice(0, 30000)}`
-          : `Extract ALL transactions from this broker statement image/PDF as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange. Return ONLY a JSON array. Image base64: data:${file.type};base64,${content.slice(0, 5000)}`;
-
-        let raw = "[]";
-        let lastParseErr: Error | null = null;
-        for (const modelId of IMPORT_MODELS) {
-          try {
-            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://auditx-beta.vercel.app",
-                "X-Title": "AuditX Import",
-              },
-              body: JSON.stringify({
-                model: modelId,
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0,
-              }),
-            });
-
-            if (res.status === 429 || res.status === 502 || res.status === 503) {
-              console.warn(`[AuditX import] Provider error ${res.status} on ${modelId}, trying next…`);
-              continue;
-            }
-            if (!res.ok) throw new Error(`AI parsing failed (${res.status})`);
-
-            const json = (await res.json()) as {
-              choices?: { message?: { content?: string } }[];
-            };
-            raw = json.choices?.[0]?.message?.content ?? "[]";
-            lastParseErr = null;
-            break;
-          } catch (err) {
-            lastParseErr = err instanceof Error ? err : new Error(String(err));
-            console.warn(`[AuditX import] Error on ${modelId}:`, lastParseErr.message);
-          }
-        }
-
-        if (lastParseErr) throw lastParseErr;
+        const raw = await complete({
+          systemPrompt: "You extract brokerage transactions. Reply with ONLY a JSON array, no prose.",
+          userPrompt: `Extract ALL transactions from this financial document as a JSON array. Each object must have: ticker, action (BUY/SELL/DIV), quantity, price, fees, wht, trade_date (YYYY-MM-DD), ref_id, broker, exchange.\n\n${content.slice(0, 50000)}`,
+        });
 
         // Strip markdown fences
         const clean = raw.replace(/```[a-z]*\n?/g, "").replace(/```/g, "").trim();
