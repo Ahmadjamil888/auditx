@@ -17,6 +17,7 @@ import { StatusPill, Container, Reveal, Panel } from "@/components/kit";
 import { useAuth } from "@/lib/auth-context";
 import { useState } from "react";
 import type { AgentAttachment } from "@/lib/agent-service";
+import { setPendingFiles, setPendingPrompt } from "@/lib/chat-session";
 import {
   Accordion,
   AccordionContent,
@@ -142,32 +143,35 @@ function Home() {
   const [chatValue, setChatValue] = useState("");
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const [isBusy, setIsBusy] = useState(false);
+  const [pendingFileList, setPendingFileList] = useState<File[]>([]);
+  const navigate = useNavigate();
 
   const handleAddFiles = (files: FileList | null) => {
     if (!files) return;
     const newAttachments: AgentAttachment[] = Array.from(files).map((file) => ({
       id: crypto.randomUUID(),
       name: file.name,
-      type: file.type,
+      mimeType: file.type || "application/octet-stream",
       size: file.size,
-      file,
     }));
     setAttachments((prev) => [...prev, ...newAttachments]);
+    setPendingFileList((prev) => [...prev, ...Array.from(files)]);
   };
 
   const handleRemoveAttachment = (id: string) => {
+    const idx = attachments.findIndex((a) => a.id === id);
     setAttachments((prev) => prev.filter((a) => a.id !== id));
+    if (idx >= 0) setPendingFileList((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSubmit = () => {
     if (!chatValue.trim() && attachments.length === 0) return;
     setIsBusy(true);
     // Navigate to parser with the prompt and attachments
-    const navigate = useNavigate();
     const message = chatValue.trim() || "Analyze the attached document(s).";
-    // Store in localStorage for the parser to pick up
-    localStorage.setItem("pendingPrompt", message);
-    localStorage.setItem("pendingAttachments", JSON.stringify(attachments.map(a => ({ name: a.name, type: a.type, size: a.size }))));
+    // Hand the prompt and files to the AuditX workspace
+    setPendingPrompt(message);
+    setPendingFiles(pendingFileList);
     navigate({ to: !loading && session ? "/app/parser" : "/signin" });
   };
 

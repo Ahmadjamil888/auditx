@@ -121,10 +121,10 @@ function TxFormModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.ticker.trim()) return toast.error("Ticker is required");
-    if (!form.trade_date) return toast.error("Trade date is required");
-    if (form.quantity <= 0) return toast.error("Quantity must be > 0");
-    if (form.price <= 0) return toast.error("Price must be > 0");
+    if (!form.ticker.trim()) { toast.error("Ticker is required"); return; }
+    if (!form.trade_date) { toast.error("Trade date is required"); return; }
+    if (form.quantity <= 0) { toast.error("Quantity must be > 0"); return; }
+    if (form.price <= 0) { toast.error("Price must be > 0"); return; }
     onSave(form);
   }
 

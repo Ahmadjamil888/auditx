@@ -400,7 +400,7 @@ export async function createFinancialEvent(
       description: event.description,
       entity_type: event.entity_type ?? null,
       entity_id: event.entity_id ?? null,
-      metadata: (event.metadata ?? null) as Record<string, unknown> | null,
+      metadata: (event.metadata ?? null) as never,
       confidence: event.confidence,
       status: event.status,
     })

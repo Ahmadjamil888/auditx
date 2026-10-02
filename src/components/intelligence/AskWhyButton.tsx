@@ -70,9 +70,9 @@ export function AskWhyButton({ context, className }: Props) {
 
       const finalPrompt = buildIntelligencePrompt(prompt, intent, toolResults, {
         jurisdiction: toolCtx.jurisdiction,
-        currentPage: context.relatedPage,
-        transactionId: context.transactionId,
-        taxYear: toolCtx.taxYear,
+        ...(context.relatedPage ? { currentPage: context.relatedPage } : {}),
+        ...(context.transactionId ? { transactionId: context.transactionId } : {}),
+        ...(toolCtx.taxYear ? { taxYear: toolCtx.taxYear } : {}),
       });
 
       // Use server-side API instead of client-side Groq call
