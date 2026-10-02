@@ -235,8 +235,8 @@ export const Route = createFileRoute("/api/chat")({
             JSON.stringify({
               code: "ai_not_configured",
               message:
-                "AI features are not configured. " +
-                "Enable Lovable AI for this project.",
+                "AI is not configured on this server. " +
+                "Add OPENROUTER_API_KEY (or GROQ_API_KEY) to your hosting environment variables and redeploy.",
             }),
             { status: 503, headers: { "Content-Type": "application/json" } },
           );

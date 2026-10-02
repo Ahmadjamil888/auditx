@@ -2,6 +2,7 @@
 // Server-only. Uses LOVABLE_API_KEY via the OpenAI Responses API.
 
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 
 export const AI_MODEL = "openai/gpt-6-astra";
@@ -19,32 +20,62 @@ export const AI_PROVIDER_OPTIONS = {
 } as const;
 
 export interface ResolvedModel {
-  provider: "lovable";
+  provider: "lovable" | "openrouter" | "groq";
   modelId: string;
   model: LanguageModel;
   cascade: Array<{ id: string; model: LanguageModel }>;
 }
 
-function readKey(env?: Record<string, unknown>): string | undefined {
-  const fromProcess = typeof process !== "undefined" ? process.env?.["LOVABLE_API_KEY"] : undefined;
+function readEnv(name: string, env?: Record<string, unknown>): string | undefined {
+  const fromProcess = typeof process !== "undefined" ? process.env?.[name] : undefined;
   const globalEnv = (globalThis as { __VERCEL_ENV__?: Record<string, unknown> }).__VERCEL_ENV__;
-  const candidate = fromProcess ?? env?.["LOVABLE_API_KEY"] ?? globalEnv?.["LOVABLE_API_KEY"];
+  const candidate = fromProcess ?? env?.[name] ?? globalEnv?.[name];
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
 }
 
+/**
+ * Lovable AI is primary. When the app is hosted somewhere without LOVABLE_API_KEY
+ * (e.g. a self-managed Vercel deployment), fall back to OPENROUTER_API_KEY, then GROQ_API_KEY.
+ */
 export async function resolveAgentModel(env?: Record<string, unknown>): Promise<ResolvedModel | null> {
-  const apiKey = readKey(env);
-  if (!apiKey) {
-    console.warn("[AuditX] LOVABLE_API_KEY is not available to the server runtime.");
-    return null;
+  const lovableKey = readEnv("LOVABLE_API_KEY", env);
+  if (lovableKey) {
+    const provider = createOpenAI({
+      baseURL: GATEWAY,
+      apiKey: lovableKey,
+      headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    });
+    const model = provider.responses(AI_MODEL) as LanguageModel;
+    return { provider: "lovable", modelId: AI_MODEL, model, cascade: [{ id: AI_MODEL, model }] };
   }
-  const provider = createOpenAI({
-    baseURL: GATEWAY,
-    apiKey,
-    headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-  });
-  const model = provider.responses(AI_MODEL) as LanguageModel;
-  return { provider: "lovable", modelId: AI_MODEL, model, cascade: [{ id: AI_MODEL, model }] };
+
+  const openRouterKey = readEnv("OPENROUTER_API_KEY", env);
+  if (openRouterKey) {
+    const modelId = readEnv("OPENROUTER_MODEL", env) ?? "openai/gpt-4o-mini";
+    const provider = createOpenAICompatible({
+      name: "openrouter",
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: openRouterKey,
+      headers: { "HTTP-Referer": readEnv("VITE_APP_URL", env) ?? "https://auditx.app", "X-Title": "AuditX" },
+    });
+    const model = provider.chatModel(modelId) as LanguageModel;
+    return { provider: "openrouter", modelId, model, cascade: [{ id: modelId, model }] };
+  }
+
+  const groqKey = readEnv("GROQ_API_KEY", env);
+  if (groqKey) {
+    const modelId = readEnv("GROQ_MODEL", env) ?? "openai/gpt-oss-20b";
+    const provider = createOpenAICompatible({
+      name: "groq",
+      baseURL: "https://api.groq.com/openai/v1",
+      apiKey: groqKey,
+    });
+    const model = provider.chatModel(modelId) as LanguageModel;
+    return { provider: "groq", modelId, model, cascade: [{ id: modelId, model }] };
+  }
+
+  console.warn("[AuditX] No AI key available: set LOVABLE_API_KEY, OPENROUTER_API_KEY or GROQ_API_KEY.");
+  return null;
 }
 
 /** Friendly message for gateway failures (credits, rate limit, etc). */
