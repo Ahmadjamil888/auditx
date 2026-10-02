@@ -399,7 +399,7 @@ function ToolCard({ part, onApprove }: { part: ToolPart; onApprove: ((approved: 
             Task Plan
           </span>
         </div>
-        {out["objective"] && <p className="px-4 pb-2 text-sm font-medium">{String(out["objective"])}</p>}
+        {out["objective"] != null && <p className="px-4 pb-2 text-sm font-medium">{String(out["objective"])}</p>}
         {steps.length > 0 && (
           <ul className="space-y-1.5 px-4 pb-4">
             {steps.map((step, i) => (
@@ -486,7 +486,7 @@ function ToolCard({ part, onApprove }: { part: ToolPart; onApprove: ((approved: 
 
       {open && (
         <div className="space-y-2 px-3 py-2 text-[11px]" style={{ color: "var(--ink-2)" }}>
-          {part.input && (
+          {part.input != null && (
             <pre className="overflow-x-auto rounded-lg bg-black/5 p-2 whitespace-pre-wrap break-words">
               {JSON.stringify(part.input, null, 2)}
             </pre>
@@ -632,7 +632,7 @@ function Chat({
               return new File([ab], f.name, { type: f.type || "application/octet-stream" });
             }))
           : undefined;
-        await sendMessage({ text: pendingText || "Analyse the attached document(s).", files: aiFiles });
+        await sendMessage({ text: pendingText || "Analyse the attached document(s).", ...(aiFiles ? { files: dataTransferFiles(aiFiles) } : {}) });
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1027,4 +1027,10 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
       plan={plan}
     />
   );
+}
+
+function dataTransferFiles(files: File[]): FileList {
+  const dt = new DataTransfer();
+  files.forEach((f) => dt.items.add(f));
+  return dt.files;
 }

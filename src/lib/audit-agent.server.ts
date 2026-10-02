@@ -25,9 +25,19 @@ export interface ResolvedModel {
   cascade: Array<{ id: string; model: LanguageModel }>;
 }
 
-export async function resolveAgentModel(_env?: Record<string, unknown>): Promise<ResolvedModel | null> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) return null;
+function readKey(env?: Record<string, unknown>): string | undefined {
+  const fromProcess = typeof process !== "undefined" ? process.env?.["LOVABLE_API_KEY"] : undefined;
+  const globalEnv = (globalThis as { __VERCEL_ENV__?: Record<string, unknown> }).__VERCEL_ENV__;
+  const candidate = fromProcess ?? env?.["LOVABLE_API_KEY"] ?? globalEnv?.["LOVABLE_API_KEY"];
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
+}
+
+export async function resolveAgentModel(env?: Record<string, unknown>): Promise<ResolvedModel | null> {
+  const apiKey = readKey(env);
+  if (!apiKey) {
+    console.warn("[AuditX] LOVABLE_API_KEY is not available to the server runtime.");
+    return null;
+  }
   const provider = createOpenAI({
     baseURL: GATEWAY,
     apiKey,
