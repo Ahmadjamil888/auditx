@@ -1,0 +1,1 @@
+alter table public.notifications add column title text not null default '', add column severity text not null default 'info', add column link text;
