@@ -18,6 +18,7 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SignupRouteImport } from './routes/signup'
@@ -84,6 +85,11 @@ const NewsRoute = NewsRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SecurityRoute = SecurityRouteImport.update({
@@ -207,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByTo {
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
@@ -272,6 +280,7 @@ export interface FileRoutesById {
   '/how-it-works': typeof HowItWorksRoute
   '/news': typeof NewsRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
@@ -307,6 +316,7 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/news'
     | '/pricing'
+    | '/reset-password'
     | '/security'
     | '/signin'
     | '/signup'
@@ -339,6 +349,7 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/news'
     | '/pricing'
+    | '/reset-password'
     | '/security'
     | '/signin'
     | '/signup'
@@ -371,6 +382,7 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/news'
     | '/pricing'
+    | '/reset-password'
     | '/security'
     | '/signin'
     | '/signup'
@@ -405,6 +417,7 @@ export interface RootRouteChildren {
   HowItWorksRoute: typeof HowItWorksRoute
   NewsRoute: typeof NewsRoute
   PricingRoute: typeof PricingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SecurityRoute: typeof SecurityRoute
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
@@ -476,6 +489,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/security': {
@@ -695,6 +715,7 @@ const rootRouteChildren: RootRouteChildren = {
   HowItWorksRoute: HowItWorksRoute,
   NewsRoute: NewsRoute,
   PricingRoute: PricingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SecurityRoute: SecurityRoute,
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
