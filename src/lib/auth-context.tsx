@@ -111,18 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[AuditX] Subscription loaded:", subRes.data ? "found" : "not found");
       }
 
-      // Default plan is always free when no subscription row exists yet.
-      if (!subRes.data) {
-        console.log("[AuditX] No subscription found, creating free subscription...");
-        await supabase
-          .from("subscriptions")
-          .insert({ org_id: row.org_id, plan: "free", status: "active" })
-          .then(() => {
-            console.log("[AuditX] Free subscription created successfully");
-          }, (err) => {
-            console.error("[AuditX] Failed to create free subscription:", err.message, err);
-          });
-      }
+      // Default plan is free when no subscription row exists (provisioned server-side).
 
       console.log("[AuditX] Setting profile state...");
       setProfile({
@@ -167,58 +156,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   async function provision(u: User) {
-    console.log("[AuditX] Starting provisioning for user:", u.id);
     const meta = u.user_metadata ?? {};
     const orgName = (meta["org_name"] as string | undefined) || `${u.email?.split("@")[0] ?? "My"} Organisation`;
-
-    console.log("[AuditX] Creating organization:", orgName);
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .insert({
-        name: orgName,
-        jurisdiction_default: (meta["jurisdiction"] as string | undefined) ?? "PSX",
-      })
-      .select("id")
-      .single();
-
-    if (orgError || !org) {
-      console.error("[AuditX] Could not create organisation:", orgError?.message, orgError);
+    const { data, error } = await supabase.rpc("provision_current_user", {
+      _org_name: orgName,
+      _full_name: (meta["full_name"] as string | undefined) ?? (meta["name"] as string | undefined) ?? u.email?.split("@")[0] ?? "",
+      _jurisdiction: (meta["jurisdiction"] as string | undefined) ?? "PSX",
+    });
+    if (error || !data) {
+      console.error("[AuditX] Provisioning failed:", error?.message, error);
       return null;
     }
-
-    console.log("[AuditX] Organization created successfully, id:", org.id);
-
-    console.log("[AuditX] Creating profile for user:", u.id);
-    const { data: created, error: profileError } = await supabase
-      .from("profiles")
-      .insert({
-        org_id: org.id,
-        user_id: u.id,
-        full_name: (meta["full_name"] as string | undefined) ?? u.email?.split("@")[0] ?? "",
-        role: "owner",
-      })
-      .select("id, org_id, full_name, role")
-      .single();
-
-    if (profileError || !created) {
-      console.error("[AuditX] Could not create profile:", profileError?.message, profileError);
-      return null;
-    }
-
-    console.log("[AuditX] Profile created successfully, id:", created.id);
-
-    console.log("[AuditX] Creating subscription for org:", org.id);
-    await supabase
-      .from("subscriptions")
-      .insert({ org_id: org.id, plan: "free", status: "active" })
-      .then(() => {
-        console.log("[AuditX] Subscription created successfully");
-      }, (err) => {
-        console.error("[AuditX] Failed to create subscription:", err.message, err);
-      });
-
-    console.log("[AuditX] Provisioning completed successfully");
-    return created;
+    const p = data as { id: string; org_id: string; full_name: string; role: string };
+    return { id: p.id, org_id: p.org_id, full_name: p.full_name, role: p.role };
   }
 
   const refreshProfile = useCallback(async () => {
