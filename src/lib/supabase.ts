@@ -1,33 +1,12 @@
-// ─── Supabase client (browser) ────────────────────────────────────────────────
-// Keys come from .env — VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
-// The anon key is safe to expose; row-level security handles authorisation.
+// ─── Lovable Cloud client (browser) ──────────────────────────────────────────
+// Re-exports the generated Lovable Cloud client so all existing imports keep
+// working. Row-level security handles authorisation.
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "./database.types";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] as string;
-const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string;
-
-if (!supabaseUrl || supabaseUrl === "https://your-project.supabase.co") {
-  console.warn(
-    "[AuditX] VITE_SUPABASE_URL is not configured. " +
-      "Fill in your Supabase project URL in .env to enable real auth and data.",
-  );
-}
-
-export const supabase = createClient<Database>(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder",
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  },
-);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+export { supabase };
 
 export async function signInWithEmail(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -43,35 +22,20 @@ export async function signUpWithEmail(
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: meta },
+    options: { data: meta, emailRedirectTo: window.location.origin },
   });
   if (error) throw new Error(error.message);
   return data;
 }
 
 export async function signInWithGoogle() {
-  // Guard: warn early if Supabase URL looks like a placeholder
-  const url = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
-  if (!url || url.includes("your-project") || url.includes("placeholder")) {
-    throw new Error(
-      "Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.",
-    );
-  }
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${window.location.origin}/app/overview`,
-      queryParams: { access_type: "offline", prompt: "consent" },
-    },
+  const result = await lovable.auth.signInWithOAuth("google", {
+    redirect_uri: window.location.origin,
   });
-
-  if (error) throw new Error(error.message);
-
-  // Supabase returns a URL to redirect to — follow it explicitly
-  if (data?.url) {
-    window.location.href = data.url;
+  if (result.error) {
+    throw new Error(result.error instanceof Error ? result.error.message : String(result.error));
   }
+  return result;
 }
 
 export async function signOut() {
@@ -86,7 +50,7 @@ export async function resetPassword(email: string) {
   if (error) throw new Error(error.message);
 }
 
-export function onAuthStateChange(callback: (session: import("@supabase/supabase-js").Session | null) => void) {
+export function onAuthStateChange(callback: (session: Session | null) => void) {
   return supabase.auth.onAuthStateChange((_event, session) => {
     callback(session);
   });
