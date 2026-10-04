@@ -28,7 +28,23 @@ export async function signUpWithEmail(
   return data;
 }
 
+// The managed Google flow relies on the /~oauth endpoint that only exists on
+// Lovable-hosted domains. Sites hosted elsewhere (e.g. Vercel) get a 404 there,
+// so they use the backend's direct OAuth redirect instead.
+function isLovableHosted() {
+  const h = window.location.hostname;
+  return h.endsWith(".lovable.app") || h.endsWith(".lovableproject.com") || h === "localhost";
+}
+
 export async function signInWithGoogle() {
+  if (!isLovableHosted()) {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  }
   const result = await lovable.auth.signInWithOAuth("google", {
     redirect_uri: window.location.origin,
   });

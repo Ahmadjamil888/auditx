@@ -260,14 +260,20 @@ export const Route = createFileRoute("/api/chat")({
 
         // ── Quota check (graceful — ai_usage table may not exist yet) ────────
         const DAILY_LIMITS: Record<string, number> = { free: 20, pro: 100, enterprise: 500 };
+        const STEP_LIMITS: Record<string, number> = { free: 8, pro: 16, enterprise: 24 };
+        const MONTHLY_TX_LIMITS: Record<string, number | null> = { free: 50, pro: null, enterprise: null };
 
         const { data: subData } = await supabase
           .from("subscriptions")
-          .select("plan")
+          .select("plan, status")
           .eq("org_id", thread.org_id)
           .maybeSingle();
-        const plan = (subData?.plan as string | undefined) ?? "free";
+        // Paid features only apply while billing is in good standing.
+        const billingOk = !subData?.status || ["active", "trialing"].includes(subData.status as string);
+        const plan = billingOk ? ((subData?.plan as string | undefined) ?? "free") : "free";
         const dailyLimit = DAILY_LIMITS[plan] ?? DAILY_LIMITS["free"]!;
+        const maxSteps = STEP_LIMITS[plan] ?? STEP_LIMITS["free"]!;
+        const monthlyTxLimit = MONTHLY_TX_LIMITS[plan] ?? 50;
 
         let creditsUsedToday = 0;
         try {
@@ -824,7 +830,11 @@ Rules for the final answer:
             resolve_flag:       "user-approval" as const,
           },
           experimental_toolApprovalSecret: approvalSecret,
-          stopWhen: stepCountIs(50),
+          stopWhen: stepCountIs(maxSteps + 1),
+          // Keep the agent focused: after the step budget, tools are switched
+          // off so the model must write its final answer instead of stalling.
+          prepareStep: ({ stepNumber }: { stepNumber: number }) =>
+            stepNumber >= maxSteps ? { toolChoice: "none" as const } : {},
           providerOptions: AI_PROVIDER_OPTIONS as never,
         };
 
