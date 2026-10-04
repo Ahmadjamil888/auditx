@@ -260,14 +260,20 @@ export const Route = createFileRoute("/api/chat")({
 
         // ── Quota check (graceful — ai_usage table may not exist yet) ────────
         const DAILY_LIMITS: Record<string, number> = { free: 20, pro: 100, enterprise: 500 };
+        const STEP_LIMITS: Record<string, number> = { free: 8, pro: 16, enterprise: 24 };
+        const MONTHLY_TX_LIMITS: Record<string, number | null> = { free: 50, pro: null, enterprise: null };
 
         const { data: subData } = await supabase
           .from("subscriptions")
-          .select("plan")
+          .select("plan, status")
           .eq("org_id", thread.org_id)
           .maybeSingle();
-        const plan = (subData?.plan as string | undefined) ?? "free";
+        // Paid features only apply while billing is in good standing.
+        const billingOk = !subData?.status || ["active", "trialing"].includes(subData.status as string);
+        const plan = billingOk ? ((subData?.plan as string | undefined) ?? "free") : "free";
         const dailyLimit = DAILY_LIMITS[plan] ?? DAILY_LIMITS["free"]!;
+        const maxSteps = STEP_LIMITS[plan] ?? STEP_LIMITS["free"]!;
+        const monthlyTxLimit = MONTHLY_TX_LIMITS[plan] ?? 50;
 
         let creditsUsedToday = 0;
         try {
@@ -442,6 +448,11 @@ export const Route = createFileRoute("/api/chat")({
             execute: async (input) => {
               const action = input.action.toUpperCase();
               if (!(["BUY", "SELL", "DIV"] as string[]).includes(action)) throw new Error("Action must be BUY, SELL, or DIV");
+              if (monthlyTxLimit !== null) {
+                const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+                const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("org_id", thread.org_id).gte("created_at", monthStart);
+                if ((count ?? 0) >= monthlyTxLimit) throw new Error(`Your ${plan} plan allows ${monthlyTxLimit} transactions per month. Upgrade to Pro on the Billing page to add more.`);
+              }
               if (input.quantity <= 0 || input.price <= 0) throw new Error("Quantity and price must be positive");
               const payload = { org_id: thread.org_id, ticker: input.ticker.toUpperCase(), action: action as "BUY" | "SELL" | "DIV", quantity: input.quantity, price: input.price, fees: input.fees ?? 0, wht: input.wht ?? 0, trade_date: input.trade_date, ref_id: input.ref_id ?? `AI-${Date.now()}`, broker: input.broker ?? "", exchange: input.exchange ?? "PSX", confidence_score: 0.95, status: "posted" as const, source: { via: "auditx_agent", thread_id: thread.id } };
               const { data, error } = await supabase.from("transactions").insert(payload).select().single();
@@ -756,6 +767,7 @@ export const Route = createFileRoute("/api/chat")({
 ━━ HOW YOU WORK ━━
 1. Read the full conversation, all uploaded documents, the real ledger, and unfinished records before making any decision. Follow-ups build on earlier turns — never ask the user to repeat information you already have.
 2. For any non-trivial task, call plan_task first (with objective, steps, agents_needed, public_stage), then call report_progress as your work moves between stages.
+   Tool budget: call at most 3 tools per step and only the agents truly needed (usually 2-4). Never call the same tool twice with the same input. Simple questions need no tools at all. Always finish with the written final answer.
    Public stages (use exactly these strings): "Understanding your task" | "Extracting financial data" | "Running reconciliation" | "Verifying evidence" | "Checking calculations" | "Preparing findings"
 3. Delegate sub-tasks via delegate_agent only when genuinely needed:
    - extraction   → read documents, broker slips, invoices, spreadsheets
@@ -824,7 +836,11 @@ Rules for the final answer:
             resolve_flag:       "user-approval" as const,
           },
           experimental_toolApprovalSecret: approvalSecret,
-          stopWhen: stepCountIs(50),
+          stopWhen: stepCountIs(maxSteps + 1),
+          // Keep the agent focused: after the step budget, tools are switched
+          // off so the model must write its final answer instead of stalling.
+          prepareStep: ({ stepNumber }: { stepNumber: number }) =>
+            stepNumber >= maxSteps ? { toolChoice: "none" as const } : {},
           providerOptions: AI_PROVIDER_OPTIONS as never,
         };
 
