@@ -448,6 +448,11 @@ export const Route = createFileRoute("/api/chat")({
             execute: async (input) => {
               const action = input.action.toUpperCase();
               if (!(["BUY", "SELL", "DIV"] as string[]).includes(action)) throw new Error("Action must be BUY, SELL, or DIV");
+              if (monthlyTxLimit !== null) {
+                const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+                const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("org_id", thread.org_id).gte("created_at", monthStart);
+                if ((count ?? 0) >= monthlyTxLimit) throw new Error(`Your ${plan} plan allows ${monthlyTxLimit} transactions per month. Upgrade to Pro on the Billing page to add more.`);
+              }
               if (input.quantity <= 0 || input.price <= 0) throw new Error("Quantity and price must be positive");
               const payload = { org_id: thread.org_id, ticker: input.ticker.toUpperCase(), action: action as "BUY" | "SELL" | "DIV", quantity: input.quantity, price: input.price, fees: input.fees ?? 0, wht: input.wht ?? 0, trade_date: input.trade_date, ref_id: input.ref_id ?? `AI-${Date.now()}`, broker: input.broker ?? "", exchange: input.exchange ?? "PSX", confidence_score: 0.95, status: "posted" as const, source: { via: "auditx_agent", thread_id: thread.id } };
               const { data, error } = await supabase.from("transactions").insert(payload).select().single();
