@@ -167,8 +167,8 @@ export const Route = createFileRoute("/api/chat")({
         if (!threadId) return new Response("threadId is required", { status: 400 });
 
         const supabaseUrl = process.env["SUPABASE_URL"] ?? (import.meta.env["VITE_SUPABASE_URL"] as string | undefined);
-        const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? (import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined);
-        if (!supabaseUrl || !supabaseKey) return new Response("Database configuration is missing", { status: 500 });
+        const supabaseKey = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? ((import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined);
+        if (!supabaseUrl || !supabaseKey) return new Response("Database configuration is missing: set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY", { status: 500 });
 
         const db = createClient<Database>(supabaseUrl, supabaseKey, {
           global: { headers: { Authorization: authorization } },
@@ -213,9 +213,9 @@ export const Route = createFileRoute("/api/chat")({
         const url = process.env["SUPABASE_URL"] ?? (import.meta.env["VITE_SUPABASE_URL"] as string | undefined);
         const key =
           process.env["SUPABASE_PUBLISHABLE_KEY"] ??
-          (import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined);
+          ((import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined);
         const approvalSecret = process.env["TOOL_APPROVAL_SECRET"] ?? "auditx-tool-approval";
-        if (!url || !key) return new Response("Database configuration is missing", { status: 500 });
+        if (!url || !key) return new Response("Database configuration is missing: set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY", { status: 500 });
 
         // Get env from global storage (set in server.ts)
         const env = (globalThis as any).__VERCEL_ENV__;
