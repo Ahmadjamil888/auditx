@@ -966,7 +966,7 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: "/api/chat",
+        api: `${aiApiOrigin()}/api/chat`,
         headers: () => ({ Authorization: `Bearer ${session?.access_token ?? ""}` }),
         // Intercept non-2xx responses and surface the actual error body
         // before the AI SDK replaces it with the generic "An error occurred."
@@ -1035,4 +1035,15 @@ function dataTransferFiles(files: File[]): FileList {
   const dt = new DataTransfer();
   files.forEach((f) => dt.items.add(f));
   return dt.files;
+}
+
+// Lovable AI only runs on Lovable hosting. When the app is served elsewhere
+// (e.g. Vercel), send AI requests to the Lovable-hosted copy of this app.
+function aiApiOrigin(): string {
+  const configured = import.meta.env["VITE_AI_API_ORIGIN"] as string | undefined;
+  if (configured) return configured.replace(/\/$/, "");
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname;
+  if (host.endsWith(".lovable.app") || host === "localhost" || host === "127.0.0.1") return "";
+  return "https://project--5357fa68-f4af-40d8-9c7a-388f4085158d.lovable.app";
 }

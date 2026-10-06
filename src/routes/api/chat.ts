@@ -154,9 +154,33 @@ function missingFields(row: {
   return missing;
 }
 
+// Lets sites hosted elsewhere (e.g. psxl.live on Vercel) use the Lovable-hosted
+// AI endpoint. Callers are still authenticated by their bearer token.
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, content-type, x-requested-with",
+  "Access-Control-Expose-Headers": "*",
+};
+type Handler = (ctx: { request: Request }) => Promise<Response>;
+function withCors(handlers: Record<string, Handler>) {
+  const wrapped: Record<string, Handler> = {
+    OPTIONS: async () => new Response(null, { status: 204, headers: CORS_HEADERS }),
+  };
+  for (const [method, fn] of Object.entries(handlers)) {
+    wrapped[method] = async (ctx) => {
+      const res = await fn(ctx);
+      const headers = new Headers(res.headers);
+      for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+    };
+  }
+  return wrapped;
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
-    handlers: {
+    handlers: withCors({
       // ── DELETE /api/chat?threadId=xxx — clear a chat thread ──────────────
       DELETE: async ({ request }) => {
         const authorization = request.headers.get("authorization") ?? "";
@@ -883,6 +907,6 @@ Rules for the final answer:
           },
         });
       },
-    },
+    }) as never,
   },
 });
