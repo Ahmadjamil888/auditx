@@ -59,7 +59,7 @@ function Pricing() {
 I am interested in the ${planName} plan.
 
 Please send me more details on how to get started.`);
-      window.location.href = `mailto:sales@auditx.demo?subject=${subject}&body=${body}`;
+      window.location.href = `mailto:ahmadjamildhami@gmail.com?subject=${subject}&body=${body}`;
     } else {
       navigate({ to: "/signup" });
     }
@@ -172,7 +172,7 @@ Please send me more details on how to get started.`);
             Professional plans can be tailored per jurisdiction, client volume and audit policy.
           </p>
         </div>
-        <Btn onClick={() => window.location.href = "mailto:sales@auditx.demo?subject=Professional Inquiry"}>Contact sales</Btn>
+        <Btn onClick={() => window.location.href = "mailto:ahmadjamildhami@gmail.com?subject=Professional Inquiry"}>Contact sales</Btn>
       </Panel>
     </PageShell>
   );

@@ -67,7 +67,7 @@ function Billing() {
   function handlePlanUpgrade(planName: string) {
     const subject = encodeURIComponent(`AuditX Plan Upgrade: ${planName}`);
     const body = encodeURIComponent(`Hi AuditX Team,\n\nI would like to upgrade my organisation to the ${planName} plan.\n\nOrganisation ID: ${user?.id || "N/A"}`);
-    window.location.href = `mailto:billing@auditx.demo?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:ahmadjamildhami@gmail.com?subject=${subject}&body=${body}`;
     toast.info(`Redirecting to your email client to complete the ${planName} upgrade...`);
   }
 
