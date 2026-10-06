@@ -974,13 +974,15 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
           const res = await fetch(input, init);
           if (!res.ok) {
             // Clone so we can read the body without consuming the original
-            const clone = res.clone();
             let message = `HTTP ${res.status}`;
-            try {
-              const body = (await clone.json()) as { message?: string; code?: string };
-              if (body.message) message = body.message;
-            } catch {
-              try { message = await clone.text(); } catch { /* use status */ }
+            const text = await res.clone().text().catch(() => "");
+            if (text) {
+              try {
+                const body = JSON.parse(text) as { message?: string };
+                message = body.message ?? text;
+              } catch {
+                message = text.slice(0, 300);
+              }
             }
             throw new Error(message);
           }
