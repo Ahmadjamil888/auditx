@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Conversation,
@@ -48,6 +49,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useAuth } from "@/lib/auth-context";
+import { ChatSidebar } from "@/components/agent/ChatSidebar";
 import { takePendingFiles, takePendingPrompt } from "@/lib/chat-session";
 import { supabase } from "@/lib/supabase";
 import { withTimeout } from "@/lib/utils";
@@ -601,6 +603,7 @@ function Chat({
   const pendingFired = useRef(false);
   const navigate = useNavigate();
   const deleteChatMutation = useDeleteChatThread();
+  const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -610,6 +613,7 @@ function Chat({
     messages: initial,
     transport,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    onFinish: () => { void queryClient.invalidateQueries({ queryKey: ["chat_threads", user?.id] }); },
     onError: (cause) => {
       // Don't show a generic toast — the ErrorBanner in the UI handles it
       console.error("[AuditX] Chat error", cause);
@@ -1021,13 +1025,18 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
   }
 
   return (
-    <Chat
-      key={threadId}
-      threadId={threadId}
-      initial={initial}
-      transport={transport}
-      plan={plan}
-    />
+    <div className="flex h-[calc(100vh-3.75rem)] min-h-[560px]">
+      <ChatSidebar activeId={threadId} />
+      <div className="min-w-0 flex-1">
+        <Chat
+          key={threadId}
+          threadId={threadId}
+          initial={initial}
+          transport={transport}
+          plan={plan}
+        />
+      </div>
+    </div>
   );
 }
 

@@ -12,6 +12,43 @@ type ChatBody = { id?: unknown; messages?: unknown };
 
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
+const SHEET_RE = /\.(xlsx|xls|csv|txt|tsv)$/i;
+const SHEET_TYPES = ["spreadsheetml", "ms-excel", "text/csv", "text/plain", "tab-separated"];
+
+/** Convert Excel/CSV/text file parts into text parts the model can read. */
+async function spreadsheetsToText(messages: UIMessage[]): Promise<UIMessage[]> {
+  let XLSX: typeof import("xlsx") | null = null;
+  return Promise.all(
+    messages.map(async (m) => {
+      if (m.role !== "user") return m;
+      const parts = await Promise.all(
+        m.parts.map(async (p) => {
+          if (p.type !== "file") return p;
+          const name = p.filename ?? "file";
+          const isSheet = SHEET_RE.test(name) || SHEET_TYPES.some((t) => p.mediaType?.includes(t));
+          if (!isSheet || !p.url.startsWith("data:")) return p;
+          try {
+            const b64 = p.url.slice(p.url.indexOf(",") + 1);
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            let body: string;
+            if (/\.(xlsx|xls)$/i.test(name) || p.mediaType?.includes("sheet") || p.mediaType?.includes("excel")) {
+              XLSX ??= await import("xlsx");
+              const wb = XLSX.read(bytes, { type: "array" });
+              body = wb.SheetNames.map((s) => `### Sheet: ${s}\n${XLSX!.utils.sheet_to_csv(wb.Sheets[s]!)}`).join("\n\n");
+            } else {
+              body = new TextDecoder().decode(bytes);
+            }
+            return { type: "text" as const, text: `Attached file "${name}":\n\`\`\`\n${body.slice(0, 60000)}\n\`\`\`` };
+          } catch {
+            return { type: "text" as const, text: `Attached file "${name}" could not be read.` };
+          }
+        }),
+      );
+      return { ...m, parts } as UIMessage;
+    }),
+  );
+}
+
 /** Safe arithmetic evaluator (no eval — Workers forbid it). */
 function evaluateExpression(input: string): number {
   const tokens = input.match(/\d+(\.\d+)?|[+\-*/()%]/g);
@@ -284,7 +321,7 @@ export const Route = createFileRoute("/api/chat")({
 
         // ── Quota check (graceful — ai_usage table may not exist yet) ────────
         const DAILY_LIMITS: Record<string, number> = { free: 20, pro: 100, enterprise: 500 };
-        const STEP_LIMITS: Record<string, number> = { free: 8, pro: 16, enterprise: 24 };
+        const STEP_LIMITS: Record<string, number> = { free: 10, pro: 18, enterprise: 28 };
         const MONTHLY_TX_LIMITS: Record<string, number | null> = { free: 50, pro: null, enterprise: null };
 
         const { data: subData } = await supabase
@@ -467,7 +504,7 @@ export const Route = createFileRoute("/api/chat")({
             },
           }),
           insert_transaction: tool({
-            description: "Create a transaction in the real ledger. Always present this action for user approval before execution.",
+            description: "Create a transaction in the real ledger. Runs immediately and is audited.",
             inputSchema: z.object({ ticker: z.string(), action: z.string(), quantity: z.number(), price: z.number(), fees: z.number().nullable(), wht: z.number().nullable(), trade_date: z.string(), ref_id: z.string().nullable(), broker: z.string().nullable(), exchange: z.string().nullable() }),
             execute: async (input) => {
               const action = input.action.toUpperCase();
@@ -744,6 +781,46 @@ export const Route = createFileRoute("/api/chat")({
               return { sent: true, title, type };
             },
           }),
+          get_account_overview: tool({
+            description: "Read the user's profile, organisation, plan/billing status, tax profile and record counts.",
+            inputSchema: z.object({}),
+            execute: async () => {
+              const [prof, org, tax, txCount, flagCount, brokers] = await Promise.all([
+                supabase.from("profiles").select("*").eq("user_id", authData.user.id).maybeSingle(),
+                supabase.from("organizations").select("*").eq("id", thread.org_id).maybeSingle(),
+                supabase.from("tax_profiles").select("*").eq("org_id", thread.org_id).maybeSingle(),
+                supabase.from("transactions").select("id", { count: "exact", head: true }).eq("org_id", thread.org_id),
+                supabase.from("reconciliation_flags").select("id", { count: "exact", head: true }).eq("org_id", thread.org_id).eq("status", "open"),
+                supabase.from("broker_accounts").select("id", { count: "exact", head: true }).eq("org_id", thread.org_id),
+              ]);
+              return {
+                email: authData.user.email,
+                profile: prof.data,
+                organisation: org.data,
+                tax_profile: tax.data,
+                plan,
+                monthly_transaction_limit: monthlyTxLimit,
+                transactions: txCount.count ?? 0,
+                open_flags: flagCount.count ?? 0,
+                broker_accounts: brokers.count ?? 0,
+              };
+            },
+          }),
+          read_google_sheet: tool({
+            description: "Read a Google Sheet from a link (sheet must be shared as 'Anyone with the link'). Returns CSV text.",
+            inputSchema: z.object({ url: z.string() }),
+            execute: async ({ url }) => {
+              const m = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+              if (!m) throw new Error("That isn't a Google Sheets link.");
+              const gid = url.match(/[#&?]gid=(\d+)/)?.[1] ?? "0";
+              const res = await fetch(`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${gid}`, { redirect: "follow" });
+              if (!res.ok || !(res.headers.get("content-type") ?? "").includes("csv")) {
+                throw new Error("Couldn't open the sheet. In Google Sheets choose Share → 'Anyone with the link' and try again.");
+              }
+              const csv = await res.text();
+              return { csv: csv.slice(0, 60000), truncated: csv.length > 60000 };
+            },
+          }),
           // ── get_broker_accounts: read broker accounts ─────────────────────
           get_broker_accounts: tool({
             description: "Read the user's connected broker accounts.",
@@ -764,7 +841,8 @@ export const Route = createFileRoute("/api/chat")({
         const lastUser = [...uiMessages].reverse().find((m) => m.role === "user");
         const latestText = (lastUser?.parts ?? []).map((p) => (p.type === "text" ? p.text : "")).join(" ");
         const title = text(latestText).slice(0, 64) || "Document audit";
-        const modelMessages = await convertToModelMessages(uiMessages);
+        // Spreadsheets/text files can't go to the model as files — turn them into text tables.
+        const modelMessages = await convertToModelMessages(await spreadsheetsToText(uiMessages));
 
         // Sanitize messages to remove reasoning_content which Groq doesn't support
         const cleanedMessages = modelMessages.map((message) => {
@@ -784,91 +862,56 @@ export const Route = createFileRoute("/api/chat")({
         // during the initial connection (before any bytes are streamed).
 
         const modelCascade = resolved.cascade;
-        const convertedMessages = await convertToModelMessages(uiMessages);
 
-        const SYSTEM_PROMPT = `You are AuditX, the Supervisor Orchestrator of an autonomous financial audit team serving PSX and NSE traders.
+        const SYSTEM_PROMPT = `You are AuditX, a fast, precise financial audit agent for PSX and NSE traders. You are connected to the user's real ledger, portfolio, profile, account, broker accounts, tax figures and reconciliation flags.
 
-━━ HOW YOU WORK ━━
-1. Read the full conversation, all uploaded documents, the real ledger, and unfinished records before making any decision. Follow-ups build on earlier turns — never ask the user to repeat information you already have.
-2. For any non-trivial task, call plan_task first (with objective, steps, agents_needed, public_stage), then call report_progress as your work moves between stages.
-   Tool budget: call at most 3 tools per step and only the agents truly needed (usually 2-4). Never call the same tool twice with the same input. Simple questions need no tools at all. Always finish with the written final answer.
-   Public stages (use exactly these strings): "Understanding your task" | "Extracting financial data" | "Running reconciliation" | "Verifying evidence" | "Checking calculations" | "Preparing findings"
-3. Delegate sub-tasks via delegate_agent only when genuinely needed:
-   - extraction   → read documents, broker slips, invoices, spreadsheets
-   - analysis     → portfolio performance, holdings, cost basis, cash flows
-   - reconciliation → match transaction sets, compute deltas, list mismatches
-   - compliance   → detect anomalies, duplicates, fee surcharges, WHT mismatches, policy risks
-   - evidence     → trace every finding to a specific source row, document or reference
-   - research     → relevant market, tax-rule or broker-format background (from supplied context only)
-   - calculation  → recompute every material figure from explicit arithmetic; never estimate
-   - quality      → re-check findings for errors, contradictions, unsupported claims before answering
-4. Pass every piece of data a specialist needs inside its context field — specialists are stateless.
-5. Use calculate for ALL material numbers (fees, tax, gains, deltas). Never compute mentally.
-6. Use get_transactions / get_ledger_summary / get_open_flags / get_unfinished_records / get_tax_computation / get_portfolio_analysis for real data. Never guess ledger contents.
+━━ SPEED AND EFFICIENCY (most important) ━━
+- Answer greetings, definitions and general questions directly with NO tools.
+- Use the fewest tools possible. Call independent read tools together in one step. Never call the same tool twice with the same input.
+- Only use delegate_agent for large multi-document audits that truly need a specialist. Never delegate simple questions.
+- Keep answers concise. Use the structured report sections only for real audits/analysis; otherwise answer in a few short paragraphs or a table.
+- Always finish with a complete written answer.
 
-━━ UNFINISHED RECORDS WORKFLOW ━━
-When the user asks to update/fix/complete unfinished records:
-1. Call get_unfinished_records → present a clear summary table of what is incomplete.
-2. Call propose_unfinished_fixes → identify which rows can be posted (all required fields present) vs. which still have missing data.
-3. For ready rows: request update_transaction approval for each one.
-4. For rows with missing required fields: do NOT invent ticker, quantity, price or date. Tell the user exactly which fields are missing and offer to export them.
-5. After completing the update flow, call prepare_spreadsheet(kind="template") to give the user a blank template for new records, and prepare_spreadsheet(kind="unfinished") for any remaining incomplete rows.
+━━ DATA ━━
+- Account/profile/plan/organisation → get_account_overview
+- Ledger rows → get_transactions; totals → get_ledger_summary; holdings/portfolio → get_portfolio_analysis
+- Tax → get_tax_computation; issues → get_open_flags; incomplete rows → get_unfinished_records; brokers → get_broker_accounts
+- Google Sheets link in the message → read_google_sheet, then analyse or import the rows
+- Uploaded Excel/CSV files arrive as text tables in the message — read them directly.
+- Use calculate for material numbers. Never guess ledger contents.
 
-━━ SPREADSHEET WORKFLOW ━━
-When the user asks for a spreadsheet/CSV:
-- kind="unfinished" → export rows still needing work
-- kind="ledger"     → export full ledger
-- kind="template"   → blank template for new entries
-- kind="custom"     → custom headers + rows you supply
-Always tell the user the file will download automatically.
+━━ ACTING ━━
+- Act directly. Do NOT ask "should I proceed?" — when the user asks to add, import, update, flag or resolve, just do it and report what changed.
+- insert_transaction, update_transaction, flag_anomaly and resolve_flag run immediately and are recorded in the audit trail.
+- Only delete_transaction asks the user to confirm (the app shows the button). Never ask for confirmation in text.
+- Never invent missing ticker, quantity, price or date — say which fields are missing.
+- Spreadsheet exports: prepare_spreadsheet (downloads a CSV that opens in Excel and Google Sheets).
 
-━━ NOTIFICATIONS ━━
-After completing a significant task (multi-step analysis, saving a report, detecting anomalies), call create_notification to alert the user with a clear title, message, severity and relevant link. Always notify on: task completion, approval required, anomalies found, errors encountered.
-
-━━ WRITES REQUIRE APPROVAL ━━
-insert_transaction, update_transaction, delete_transaction, flag_anomaly, resolve_flag all require explicit user approval. Propose clearly; never claim success until the tool result confirms it.
-
-━━ QUALITY GATE ━━
-Before the final answer on any task involving numbers, reconciliation or compliance, run a quality delegation to catch arithmetic errors, contradictions or unsupported claims. If quality returns REVISE, fix the issues before replying.
-
-━━ FINAL ANSWER FORMAT ━━
-Use only the sections that apply (skip empty ones):
-
-## Summary
-## Key Findings
-## Evidence
-## Discrepancies
-## Risk Areas
-## Recommended Actions
-## Confidence Level
-
-Rules for the final answer:
-- Mark every figure as verified (source: field name, reference ID, or document) or clearly labelled as an assumption.
-- Use markdown tables for financial figures.
-- Never reveal hidden chain-of-thought or internal agent communications.
-- Close with a one-line disclaimer that results are indicative and should be verified before filing.`;
+━━ AUDIT REPORT FORMAT (only for real analysis) ━━
+## Summary / ## Key Findings / ## Discrepancies / ## Recommended Actions / ## Confidence Level
+Mark figures as verified (with source) or assumption. Use markdown tables. Never reveal hidden reasoning.`;
 
         const STREAM_OPTS = {
           system: SYSTEM_PROMPT,
           messages: cleanedMessages,
           tools,
+          // Only destructive deletes need a confirmation; everything else is audited.
           toolApproval: {
-            insert_transaction: "user-approval" as const,
-            update_transaction: "user-approval" as const,
             delete_transaction: "user-approval" as const,
-            flag_anomaly:       "user-approval" as const,
-            resolve_flag:       "user-approval" as const,
           },
           experimental_toolApprovalSecret: approvalSecret,
-          stopWhen: stepCountIs(maxSteps + 1),
-          // Keep the agent focused: after the step budget, tools are switched
-          // off so the model must write its final answer instead of stalling.
+          stopWhen: stepCountIs(50),
+          // After the plan's tool budget, tools switch off so the model must
+          // write its final answer instead of stopping mid-way.
           prepareStep: ({ stepNumber }: { stepNumber: number }) =>
             stepNumber >= maxSteps ? { toolChoice: "none" as const } : {},
           providerOptions: AI_PROVIDER_OPTIONS as never,
         };
 
-        const result = streamText({ model, ...STREAM_OPTS, abortSignal: request.signal });
+        // No abortSignal: the answer finishes and is saved even if the
+        // browser connection drops mid-response.
+        const result = streamText({ model, ...STREAM_OPTS });
+        void result.consumeStream();
         return result.toUIMessageStreamResponse({
           sendReasoning: true,
           originalMessages: uiMessages,
