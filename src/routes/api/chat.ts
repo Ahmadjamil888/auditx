@@ -321,7 +321,7 @@ export const Route = createFileRoute("/api/chat")({
 
         // ── Quota check (graceful — ai_usage table may not exist yet) ────────
         const DAILY_LIMITS: Record<string, number> = { free: 20, pro: 100, enterprise: 500 };
-        const STEP_LIMITS: Record<string, number> = { free: 8, pro: 16, enterprise: 24 };
+        const STEP_LIMITS: Record<string, number> = { free: 10, pro: 18, enterprise: 28 };
         const MONTHLY_TX_LIMITS: Record<string, number | null> = { free: 50, pro: null, enterprise: null };
 
         const { data: subData } = await supabase
@@ -504,7 +504,7 @@ export const Route = createFileRoute("/api/chat")({
             },
           }),
           insert_transaction: tool({
-            description: "Create a transaction in the real ledger. Always present this action for user approval before execution.",
+            description: "Create a transaction in the real ledger. Runs immediately and is audited.",
             inputSchema: z.object({ ticker: z.string(), action: z.string(), quantity: z.number(), price: z.number(), fees: z.number().nullable(), wht: z.number().nullable(), trade_date: z.string(), ref_id: z.string().nullable(), broker: z.string().nullable(), exchange: z.string().nullable() }),
             execute: async (input) => {
               const action = input.action.toUpperCase();
@@ -862,7 +862,6 @@ export const Route = createFileRoute("/api/chat")({
         // during the initial connection (before any bytes are streamed).
 
         const modelCascade = resolved.cascade;
-        const convertedMessages = await convertToModelMessages(uiMessages);
 
         const SYSTEM_PROMPT = `You are AuditX, a fast, precise financial audit agent for PSX and NSE traders. You are connected to the user's real ledger, portfolio, profile, account, broker accounts, tax figures and reconciliation flags.
 
