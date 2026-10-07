@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Conversation,
@@ -602,6 +603,7 @@ function Chat({
   const pendingFired = useRef(false);
   const navigate = useNavigate();
   const deleteChatMutation = useDeleteChatThread();
+  const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -611,6 +613,7 @@ function Chat({
     messages: initial,
     transport,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    onFinish: () => { void queryClient.invalidateQueries({ queryKey: ["chat_threads", user?.id] }); },
     onError: (cause) => {
       // Don't show a generic toast — the ErrorBanner in the UI handles it
       console.error("[AuditX] Chat error", cause);
