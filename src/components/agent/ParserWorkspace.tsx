@@ -48,6 +48,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useAuth } from "@/lib/auth-context";
+import { ChatSidebar } from "@/components/agent/ChatSidebar";
 import { takePendingFiles, takePendingPrompt } from "@/lib/chat-session";
 import { supabase } from "@/lib/supabase";
 import { withTimeout } from "@/lib/utils";
@@ -1021,13 +1022,18 @@ export function ParserWorkspace({ threadId }: { threadId: string }) {
   }
 
   return (
-    <Chat
-      key={threadId}
-      threadId={threadId}
-      initial={initial}
-      transport={transport}
-      plan={plan}
-    />
+    <div className="flex h-[calc(100vh-3.75rem)] min-h-[560px]">
+      <ChatSidebar activeId={threadId} />
+      <div className="min-w-0 flex-1">
+        <Chat
+          key={threadId}
+          threadId={threadId}
+          initial={initial}
+          transport={transport}
+          plan={plan}
+        />
+      </div>
+    </div>
   );
 }
 
