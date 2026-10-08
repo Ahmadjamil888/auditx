@@ -4,6 +4,7 @@ import {
   Bell,
   Building2,
   CreditCard,
+  Download,
   Key,
   Loader2,
   Plus,
@@ -26,18 +27,20 @@ import {
   useDeleteOrganization,
 } from "@/lib/data-hooks";
 import { ConnectedSourcesTab } from "@/components/app/ConnectedSourcesTab";
+import { DirectSourceConnect } from "@/components/app/DirectSourceConnect";
 
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
 });
 
-type Tab = "org" | "tax-profiles" | "brokers" | "sources" | "team" | "notifications" | "api";
+type Tab = "org" | "tax-profiles" | "brokers" | "import" | "sources" | "team" | "notifications" | "api";
 
 const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: "org",          label: "Organisation",      icon: Building2  },
   { id: "tax-profiles", label: "Tax Profiles",       icon: CreditCard },
   { id: "brokers",      label: "Broker Accounts",    icon: Key        },
+  { id: "import",       label: "Import Data",         icon: Download   },
   { id: "sources",      label: "Connected Sources",  icon: Share2     },
   { id: "team",         label: "Team & Roles",        icon: Users      },
   { id: "notifications",label: "Notifications",      icon: Bell       },
@@ -545,6 +548,22 @@ function Settings() {
                     Team invitations require additional setup. Contact support to enable team collaboration.
                   </p>
                 </div>
+              </Panel>
+            </motion.div>
+          )}
+
+          {tab === "import" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <Panel>
+                <p className="mb-1 text-sm font-semibold">Import Data</p>
+                <p className="mb-5 text-xs" style={{ color: "var(--ink-3)" }}>
+                  Upload an Excel / CSV file or connect a Google Sheet. AuditX will ask for
+                  permission before touching any of your data.
+                </p>
+                <DirectSourceConnect
+                  orgId={profile?.org_id ?? ""}
+                  onComplete={() => setTab("brokers")}
+                />
               </Panel>
             </motion.div>
           )}

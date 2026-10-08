@@ -28,6 +28,7 @@ import {
   getFinancialHealth,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 
 // ── Context-aware suggestions ─────────────────────────────────────────────────
 
@@ -125,6 +126,7 @@ interface Props {
 
 export function ContextualIntelligencePanel({ currentPage, entityId, isOpen = true, onClose }: Props) {
   const { profile } = useAuth();
+  const { jurisdiction, taxYear } = useLedgerContext();
   const [query, setQuery] = useState("");
   const [response, setResponse] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -144,8 +146,8 @@ export function ContextualIntelligencePanel({ currentPage, entityId, isOpen = tr
 
       const toolCtx: IntelligenceToolContext = {
         orgId: profile.org_id,
-        jurisdiction: (profile.jurisdiction as "PSX" | "NSE") ?? "PSX",
-        taxYear: "2025",
+        jurisdiction,
+        taxYear,
         currentPage,
         currentTransactionId: entityId,
       };

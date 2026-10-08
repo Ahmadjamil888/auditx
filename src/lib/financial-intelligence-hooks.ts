@@ -24,11 +24,18 @@ import {
 
 export function usePortfolioSummary() {
   const { profile } = useAuth();
-  const jurisdiction = (profile?.jurisdiction as "PSX" | "NSE") ?? "PSX";
   const { data: transactions = [], isLoading } = useTransactions(profile?.org_id);
   const { data: flags = [] } = useReconciliationFlags(profile?.org_id);
 
-  const summary = computePortfolioSummary(transactions, jurisdiction, "2025");
+  // Detect jurisdiction from actual transaction exchanges
+  const nseCount = transactions.filter((t) => t.exchange === "NSE").length;
+  const jurisdiction: "PSX" | "NSE" =
+    transactions.length === 0
+      ? ((profile?.jurisdiction as "PSX" | "NSE" | undefined) ?? "PSX")
+      : nseCount > transactions.length / 2 ? "NSE" : "PSX";
+
+  const taxYear = String(new Date().getFullYear());
+  const summary = computePortfolioSummary(transactions, jurisdiction, taxYear);
   const summaryWithFlags: PortfolioSummary = {
     ...summary,
     openFlags: flags.length,

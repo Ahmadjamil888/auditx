@@ -16,6 +16,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { useDailyBriefing } from "@/lib/financial-intelligence-hooks";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -73,7 +74,7 @@ function MetricDelta({ label, value, delta, currency, isGoodWhenDown }: MetricDe
 export function DailyBriefing() {
   const { profile } = useAuth();
   const { briefing, isLoading } = useDailyBriefing();
-  const currency = profile?.jurisdiction === "PSX" ? "PKR" : "INR";
+  const { currency } = useLedgerContext();
 
   if (isLoading) {
     return (

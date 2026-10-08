@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useTransactions } from "@/lib/data-hooks";
 import { computeTax, suggestHarvesting, type Jurisdiction } from "@/lib/tax";
 import { explainTaxComputation } from "@/lib/ai-service";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 
 export const Route = createFileRoute("/app/tax")({
   component: TaxCenter,
@@ -22,21 +23,28 @@ export const Route = createFileRoute("/app/tax")({
 
 function TaxCenter() {
   const { profile } = useAuth();
-  const [jurisdiction, setJurisdiction] = useState<Jurisdiction>((profile?.jurisdiction as Jurisdiction) ?? "PSX");
-  const [filerStatus, setFilerStatus] = useState<"Filer" | "Non-Filer">("Filer");
-  const [taxYear, setTaxYear] = useState("2025");
+  const { jurisdiction: detectedJ, taxYear: currentYear } = useLedgerContext();
+
+  const [jurisdiction, setJurisdiction] = useState<Jurisdiction | null>(null);
+  const [filerStatus,  setFilerStatus]  = useState<"Filer" | "Non-Filer">("Filer");
+  const [taxYear,      setTaxYear]      = useState<string | null>(null);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
-  const [loadingAI, setLoadingAI] = useState(false);
+  const [loadingAI,    setLoadingAI]    = useState(false);
 
   const { data: transactions = [] } = useTransactions(profile?.org_id);
-  const tax = computeTax(transactions, { jurisdiction, filerStatus, taxYear });
+
+  // Use detected values unless the user has overridden them via the dropdowns
+  const activeJurisdiction = jurisdiction ?? detectedJ;
+  const activeYear         = taxYear      ?? currentYear;
+
+  const tax     = computeTax(transactions, { jurisdiction: activeJurisdiction, filerStatus, taxYear: activeYear });
   const harvest = suggestHarvesting(transactions, tax.totalGain);
 
   async function getAIExplanation() {
     setLoadingAI(true);
     try {
       const result = await explainTaxComputation(
-        jurisdiction,
+        activeJurisdiction,
         tax.shortTermGain,
         tax.longTermGain,
         tax.estimatedTaxDue,
@@ -53,7 +61,7 @@ function TaxCenter() {
   const fmt = (n: number) =>
     n.toLocaleString("en-PK", { maximumFractionDigits: 0 });
 
-  const currency = jurisdiction === "PSX" ? "PKR" : "INR";
+  const currency = activeJurisdiction === "PSX" ? "PKR" : "INR";
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -70,19 +78,21 @@ function TaxCenter() {
           <div>
             <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>Tax year</label>
             <select
-              value={taxYear}
+              value={activeYear}
               onChange={(e) => setTaxYear(e.target.value)}
               className="rounded-[10px] border bg-white px-3 py-2.5 text-sm outline-none"
               style={{ borderColor: "var(--hairline)" }}
             >
-              <option>2025</option>
-              <option>2024</option>
+              {[0, 1, 2].map((offset) => {
+                const y = String(new Date().getFullYear() - offset);
+                return <option key={y} value={y}>{y}</option>;
+              })}
             </select>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>Jurisdiction</label>
             <select
-              value={jurisdiction}
+              value={activeJurisdiction}
               onChange={(e) => setJurisdiction(e.target.value as Jurisdiction)}
               className="rounded-[10px] border bg-white px-3 py-2.5 text-sm outline-none"
               style={{ borderColor: "var(--hairline)" }}
@@ -91,7 +101,7 @@ function TaxCenter() {
               <option value="NSE">NSE — India</option>
             </select>
           </div>
-          {jurisdiction === "PSX" && (
+          {activeJurisdiction === "PSX" && (
             <div>
               <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--ink-2)" }}>Filer status</label>
               <select
@@ -120,14 +130,14 @@ function TaxCenter() {
           {
             label: "Short-term Gain",
             value: `${currency} ${fmt(tax.shortTermGain)}`,
-            sublabel: `Tax @ ${jurisdiction === "PSX" ? "15%" : "20%"}`,
+            sublabel: `Tax @ ${activeJurisdiction === "PSX" ? "15%" : "20%"}`,
             tone: tax.shortTermGain >= 0 ? "ok" as const : "bad" as const,
             i: 0,
           },
           {
             label: "Long-term Gain",
             value: `${currency} ${fmt(tax.longTermGain)}`,
-            sublabel: `Tax @ ${jurisdiction === "PSX" ? "12.5%" : "12.5%"}`,
+            sublabel: `Tax @ ${activeJurisdiction === "PSX" ? "12.5%" : "12.5%"}`,
             tone: tax.longTermGain >= 0 ? "ok" as const : "bad" as const,
             i: 1,
           },

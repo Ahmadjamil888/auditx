@@ -112,7 +112,16 @@ export function computePortfolioSummary(
   jurisdiction: "PSX" | "NSE",
   taxYear: string,
 ): PortfolioSummary {
-  const currency = jurisdiction === "PSX" ? "PKR" : "INR";
+  // Detect actual exchange from transaction data — don't blindly trust org default.
+  // If any transaction uses NSE, treat the ledger as NSE for currency purposes.
+  const hasNSE  = transactions.some((t) => t.exchange === "NSE");
+  const hasPSX  = transactions.some((t) => t.exchange === "PSX" || !t.exchange);
+  // Mixed-exchange portfolios use the dominant one (more transactions)
+  const nseCount = transactions.filter((t) => t.exchange === "NSE").length;
+  const psxCount = transactions.length - nseCount;
+  const detectedJurisdiction: "PSX" | "NSE" =
+    nseCount > psxCount ? "NSE" : (hasPSX ? "PSX" : (hasNSE ? "NSE" : jurisdiction));
+  const currency = detectedJurisdiction === "NSE" ? "INR" : "PKR";
 
   // Build current positions (net BUY - SELL)
   const positions: Record<string, { qty: number; avgCost: number }> = {};
@@ -140,8 +149,8 @@ export function computePortfolioSummary(
     .slice(0, 8)
     .map((item) => ({ ...item, pct: totalValue > 0 ? (item.value / totalValue) * 100 : 0 }));
 
-  // Tax computation (deterministic FIFO)
-  const tax = computeTax(transactions, { jurisdiction, filerStatus: "Filer", taxYear });
+  // Tax computation uses the detected jurisdiction
+  const tax = computeTax(transactions, { jurisdiction: detectedJurisdiction, filerStatus: "Filer", taxYear });
 
   const unreconciledCount = transactions.filter((t) => t.status === "needs_review").length;
 

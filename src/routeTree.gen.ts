@@ -27,6 +27,7 @@ import { Route as ApiIntelligenceRouteImport } from './routes/api/intelligence'
 import { Route as ApiSheetsImportRouteImport } from './routes/api/sheets-import'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentRouteImport } from './routes/app.agent'
+import { Route as AppActivityRouteImport } from './routes/app.activity'
 import { Route as AppAuditTrailRouteImport } from './routes/app.audit-trail'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppInsightsRouteImport } from './routes/app.insights'
@@ -36,11 +37,15 @@ import { Route as AppOverviewRouteImport } from './routes/app.overview'
 import { Route as AppParserRouteImport } from './routes/app.parser'
 import { Route as AppReconciliationRouteImport } from './routes/app.reconciliation'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
+import { Route as AppReviewRouteImport } from './routes/app.review'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppTaxRouteImport } from './routes/app.tax'
 import { Route as AppTimelineRouteImport } from './routes/app.timeline'
 import { Route as AppParserIndexRouteImport } from './routes/app.parser.index'
 import { Route as AppParserThreadIdRouteImport } from './routes/app.parser.$threadId'
+import { Route as ApiAgentApproveRouteImport } from './routes/api/agent/approve'
+import { Route as ApiAgentHeartbeatRouteImport } from './routes/api/agent/heartbeat'
+import { Route as ApiDocumentsUploadRouteImport } from './routes/api/documents/upload'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -132,6 +137,11 @@ const AppAgentRoute = AppAgentRouteImport.update({
   path: '/agent',
   getParentRoute: () => AppRoute,
 } as any)
+const AppActivityRoute = AppActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAuditTrailRoute = AppAuditTrailRouteImport.update({
   id: '/audit-trail',
   path: '/audit-trail',
@@ -175,6 +185,11 @@ const AppReconciliationRoute = AppReconciliationRouteImport.update({
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReviewRoute = AppReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -221,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/api/intelligence': typeof ApiIntelligenceRoute
   '/api/sheets-import': typeof ApiSheetsImportRoute
   '/app/agent': typeof AppAgentRoute
+  '/app/activity': typeof AppActivityRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/insights': typeof AppInsightsRoute
@@ -230,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/app/parser': typeof AppParserRouteWithChildren
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
+  '/app/review': typeof AppReviewRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
   '/app/timeline': typeof AppTimelineRoute
@@ -254,6 +271,7 @@ export interface FileRoutesByTo {
   '/api/intelligence': typeof ApiIntelligenceRoute
   '/api/sheets-import': typeof ApiSheetsImportRoute
   '/app/agent': typeof AppAgentRoute
+  '/app/activity': typeof AppActivityRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/insights': typeof AppInsightsRoute
@@ -262,6 +280,7 @@ export interface FileRoutesByTo {
   '/app/overview': typeof AppOverviewRoute
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
+  '/app/review': typeof AppReviewRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
   '/app/timeline': typeof AppTimelineRoute
@@ -288,6 +307,7 @@ export interface FileRoutesById {
   '/api/intelligence': typeof ApiIntelligenceRoute
   '/api/sheets-import': typeof ApiSheetsImportRoute
   '/app/agent': typeof AppAgentRoute
+  '/app/activity': typeof AppActivityRoute
   '/app/audit-trail': typeof AppAuditTrailRoute
   '/app/billing': typeof AppBillingRoute
   '/app/insights': typeof AppInsightsRoute
@@ -297,6 +317,7 @@ export interface FileRoutesById {
   '/app/parser': typeof AppParserRouteWithChildren
   '/app/reconciliation': typeof AppReconciliationRoute
   '/app/reports': typeof AppReportsRoute
+  '/app/review': typeof AppReviewRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/tax': typeof AppTaxRoute
   '/app/timeline': typeof AppTimelineRoute
@@ -324,6 +345,7 @@ export interface FileRouteTypes {
     | '/api/intelligence'
     | '/api/sheets-import'
     | '/app/agent'
+    | '/app/activity'
     | '/app/audit-trail'
     | '/app/billing'
     | '/app/insights'
@@ -333,6 +355,7 @@ export interface FileRouteTypes {
     | '/app/parser'
     | '/app/reconciliation'
     | '/app/reports'
+    | '/app/review'
     | '/app/settings'
     | '/app/tax'
     | '/app/timeline'
@@ -357,6 +380,7 @@ export interface FileRouteTypes {
     | '/api/intelligence'
     | '/api/sheets-import'
     | '/app/agent'
+    | '/app/activity'
     | '/app/audit-trail'
     | '/app/billing'
     | '/app/insights'
@@ -365,6 +389,7 @@ export interface FileRouteTypes {
     | '/app/overview'
     | '/app/reconciliation'
     | '/app/reports'
+    | '/app/review'
     | '/app/settings'
     | '/app/tax'
     | '/app/timeline'
@@ -390,6 +415,7 @@ export interface FileRouteTypes {
     | '/api/intelligence'
     | '/api/sheets-import'
     | '/app/agent'
+    | '/app/activity'
     | '/app/audit-trail'
     | '/app/billing'
     | '/app/insights'
@@ -399,6 +425,7 @@ export interface FileRouteTypes {
     | '/app/parser'
     | '/app/reconciliation'
     | '/app/reports'
+    | '/app/review'
     | '/app/settings'
     | '/app/tax'
     | '/app/timeline'
@@ -424,6 +451,9 @@ export interface RootRouteChildren {
   ApiChatRoute: typeof ApiChatRoute
   ApiIntelligenceRoute: typeof ApiIntelligenceRoute
   ApiSheetsImportRoute: typeof ApiSheetsImportRoute
+  ApiAgentApproveRoute: typeof ApiAgentApproveRouteImport
+  ApiAgentHeartbeatRoute: typeof ApiAgentHeartbeatRouteImport
+  ApiDocumentsUploadRoute: typeof ApiDocumentsUploadRouteImport
 }
 
 declare module '@tanstack/react-router' {
@@ -671,6 +701,7 @@ const AppParserRouteWithChildren = AppParserRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAgentRoute: typeof AppAgentRoute
+  AppActivityRoute: typeof AppActivityRoute
   AppAuditTrailRoute: typeof AppAuditTrailRoute
   AppBillingRoute: typeof AppBillingRoute
   AppInsightsRoute: typeof AppInsightsRoute
@@ -680,6 +711,7 @@ interface AppRouteChildren {
   AppParserRoute: typeof AppParserRouteWithChildren
   AppReconciliationRoute: typeof AppReconciliationRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppReviewRoute: typeof AppReviewRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTaxRoute: typeof AppTaxRoute
   AppTimelineRoute: typeof AppTimelineRoute
@@ -688,6 +720,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgentRoute: AppAgentRoute,
+  AppActivityRoute: AppActivityRoute,
   AppAuditTrailRoute: AppAuditTrailRoute,
   AppBillingRoute: AppBillingRoute,
   AppInsightsRoute: AppInsightsRoute,
@@ -697,6 +730,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppParserRoute: AppParserRouteWithChildren,
   AppReconciliationRoute: AppReconciliationRoute,
   AppReportsRoute: AppReportsRoute,
+  AppReviewRoute: AppReviewRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTaxRoute: AppTaxRoute,
   AppTimelineRoute: AppTimelineRoute,

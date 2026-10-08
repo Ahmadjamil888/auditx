@@ -14,6 +14,7 @@ import {
   detectIntent,
   type IntelligenceToolContext,
 } from "@/lib/intelligence-tools";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 
 export interface AskWhyContext {
   metric: string;
@@ -30,6 +31,7 @@ interface Props {
 
 export function AskWhyButton({ context, className }: Props) {
   const { profile } = useAuth();
+  const { jurisdiction, taxYear } = useLedgerContext();
   const [open, setOpen] = useState(false);
   const [response, setResponse] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -43,8 +45,8 @@ export function AskWhyButton({ context, className }: Props) {
 
     const toolCtx: IntelligenceToolContext = {
       orgId: profile.org_id,
-      jurisdiction: (profile.jurisdiction as "PSX" | "NSE") ?? "PSX",
-      taxYear: "2025",
+      jurisdiction,
+      taxYear,
       currentPage: context.relatedPage,
       currentTransactionId: context.transactionId,
     };

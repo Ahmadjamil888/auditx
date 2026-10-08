@@ -18,6 +18,7 @@ import { useTransactions, useReconciliationFlags } from "@/lib/data-hooks";
 import { useFinancialInsights } from "@/lib/financial-intelligence-hooks";
 import { InsightCard, InsightCardEmpty } from "@/components/intelligence/InsightCard";
 import { computeTax, suggestHarvesting } from "@/lib/tax";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 import type { InsightData } from "@/components/intelligence/InsightCard";
 import type { EventSeverity } from "@/lib/financial-intelligence";
 
@@ -29,8 +30,7 @@ type FilterLevel = "ALL" | "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 
 function InsightsPage() {
   const { profile } = useAuth();
-  const jurisdiction = (profile?.jurisdiction as "PSX" | "NSE") ?? "PSX";
-  const currency = jurisdiction === "PSX" ? "PKR" : "INR";
+  const { jurisdiction, currency, taxYear } = useLedgerContext();
 
   const { data: transactions = [] } = useTransactions(profile?.org_id);
   const { data: flags = [] } = useReconciliationFlags(profile?.org_id);
@@ -111,7 +111,7 @@ function InsightsPage() {
       });
     }
 
-    const tax = computeTax(transactions, { jurisdiction, filerStatus: "Filer", taxYear: "2025" });
+    const tax = computeTax(transactions, { jurisdiction, filerStatus: "Filer", taxYear });
     const harvestOpportunities = suggestHarvesting(transactions, tax.totalGain);
     if (harvestOpportunities.length > 0) {
       const totalSaving = harvestOpportunities.reduce(

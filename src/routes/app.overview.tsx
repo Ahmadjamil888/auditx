@@ -235,17 +235,26 @@ function FoundSomethingSection({
 function MissionControl() {
   const { profile } = useAuth();
   const jurisdiction = (profile?.jurisdiction as "PSX" | "NSE") ?? "PSX";
-  const currency = jurisdiction === "PSX" ? "PKR" : "INR";
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions(profile?.org_id);
   const { data: flags = [] } = useReconciliationFlags(profile?.org_id);
+
+  // Detect actual currency from transaction exchanges — not from org default
+  const nseCount = transactions.filter((t) => t.exchange === "NSE").length;
+  const psxCount = transactions.length - nseCount;
+  const detectedJurisdiction: "PSX" | "NSE" =
+    transactions.length === 0 ? jurisdiction :
+    nseCount > psxCount ? "NSE" : "PSX";
+  const currency = detectedJurisdiction === "NSE" ? "INR" : "PKR";
+
+  const currentYear = String(new Date().getFullYear());
   const { score, isLoading: scoreLoading } = useHealthScore();
   const { summary } = usePortfolioSummary();
   const { priorities, isLoading: prioritiesLoading } = usePriorities();
   const { data: events = [], isLoading: eventsLoading } = useFinancialEvents(30);
   const { data: insights = [] } = useFinancialInsights(5);
 
-  const tax = computeTax(transactions, { jurisdiction, filerStatus: "Filer", taxYear: "2025" });
+  const tax = computeTax(transactions, { jurisdiction: detectedJurisdiction, filerStatus: "Filer", taxYear: currentYear });
   const unreconciledCount = transactions.filter((t) => t.status === "needs_review").length;
 
   // Portfolio allocation — use same avg-cost remaining-position logic as computePortfolioSummary
@@ -497,7 +506,7 @@ function MissionControl() {
             <div>
               <p className="text-sm font-bold">Cumulative Realized P&L</p>
               <p className="text-xs" style={{ color: "var(--ink-3)" }}>
-                {currency} · YTD 2025 · FIFO lot matching
+                {currency} · YTD {currentYear} · FIFO lot matching
               </p>
             </div>
             <TrendingUp size={16} style={{ color: "var(--color-accent)" }} />

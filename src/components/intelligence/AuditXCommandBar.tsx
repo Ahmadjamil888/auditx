@@ -28,6 +28,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { useAIContext } from "@/lib/financial-intelligence-hooks";
 import { detectIntent, buildIntelligencePrompt, getPortfolioSummary, getTaxLiability, getUnreconciledTransactions, getCriticalAnomalies, getFinancialHealth, type IntelligenceToolContext } from "@/lib/intelligence-tools";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ interface CommandBarProps {
 
 export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
   const { profile } = useAuth();
+  const { jurisdiction, taxYear } = useLedgerContext();
   const routerState = useRouterState();
   const navigate = useNavigate();
   const currentPath = routerState.location.pathname;
@@ -137,8 +139,8 @@ export function AuditXCommandBar({ open, onClose }: CommandBarProps) {
 
       const toolCtx: IntelligenceToolContext = {
         orgId: profile.org_id,
-        jurisdiction: (profile.jurisdiction as "PSX" | "NSE") ?? "PSX",
-        taxYear: "2025",
+        jurisdiction,
+        taxYear,
         currentPage: currentPath,
       };
 

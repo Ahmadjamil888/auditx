@@ -1,6 +1,4 @@
 // ─── AuditX Investigations ────────────────────────────────────────────────────
-// Run structured investigations. Every finding has evidence. No invented numbers.
-
 import { createFileRoute } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -29,6 +27,7 @@ import { useTransactions, useReconciliationFlags } from "@/lib/data-hooks";
 import { computeTax } from "@/lib/tax";
 import { computePortfolioSummary, computeHealthScore } from "@/lib/financial-intelligence";
 import { buildIntelligencePrompt, detectIntent, getPortfolioSummary, getTaxLiability, getUnreconciledTransactions, getCriticalAnomalies, getBrokerDiscrepancies, getMissingDocuments, type IntelligenceToolContext } from "@/lib/intelligence-tools";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 
 export const Route = createFileRoute("/app/investigations")({
   component: Investigations,
@@ -321,8 +320,7 @@ function InvestigationReport({ result }: { result: InvestigationResult }) {
 
 function Investigations() {
   const { profile } = useAuth();
-  const jurisdiction = (profile?.jurisdiction as "PSX" | "NSE") ?? "PSX";
-  const currency = jurisdiction === "PSX" ? "PKR" : "INR";
+  const { jurisdiction, currency, taxYear } = useLedgerContext();
 
   const { data: transactions = [] } = useTransactions(profile?.org_id);
   const { data: flags = [] } = useReconciliationFlags(profile?.org_id);
@@ -361,7 +359,7 @@ function Investigations() {
     const toolCtx: IntelligenceToolContext = {
       orgId: profile.org_id,
       jurisdiction,
-      taxYear: "2025",
+      taxYear,
     };
 
     // Progressive step display
@@ -390,7 +388,7 @@ function Investigations() {
       const intent = detectIntent(config.prompt);
       const aiPrompt = buildIntelligencePrompt(config.prompt, intent, toolResults as any, {
         jurisdiction,
-        taxYear: "2025",
+        taxYear,
       });
 
       setProgress((p) => [...p.slice(-4), "Generating intelligence report…"]);
@@ -423,7 +421,7 @@ function Investigations() {
       const taxResult = computeTax(transactions, {
         jurisdiction,
         filerStatus: "Filer",
-        taxYear: "2025",
+        taxYear,
       });
       const health = computeHealthScore(transactions, flags.length, flags.filter((f) => f.severity === "bad").length);
 

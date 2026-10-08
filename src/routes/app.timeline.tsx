@@ -14,6 +14,7 @@ import {
   generateTimelineFromTransactions,
   type TimelineEntry,
 } from "@/components/intelligence/FinancialTimeline";
+import { useLedgerContext } from "@/lib/use-ledger-context";
 import type { EventSeverity } from "@/lib/financial-intelligence";
 
 export const Route = createFileRoute("/app/timeline")({
@@ -24,8 +25,7 @@ type FilterLevel = "ALL" | "CRITICAL" | "HIGH" | "MEDIUM" | "SUCCESS";
 
 function FinancialTimelinePage() {
   const { profile } = useAuth();
-  const jurisdiction = (profile?.jurisdiction as "PSX" | "NSE") ?? "PSX";
-  const currency = jurisdiction === "PSX" ? "PKR" : "INR";
+  const { currency } = useLedgerContext();
 
   const { data: transactions = [], isLoading: txLoading } = useTransactions(profile?.org_id);
   const { data: flags = [] } = useReconciliationFlags(profile?.org_id);
