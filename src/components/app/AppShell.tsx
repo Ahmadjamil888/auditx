@@ -7,11 +7,13 @@ import {
   CreditCard,
   FileText,
   GitFork,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
   PanelLeft,
   PanelRight,
+  Radio,
   Settings,
   Shield,
   Sparkles,
@@ -24,6 +26,8 @@ import { Logo, LogoMark } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
 import { CommandBarProvider, useCommandBar } from "@/components/intelligence/AuditXCommandBar";
 import { NotificationBell, NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { usePendingApprovals } from "@/lib/data-hooks";
+import { useAgentHeartbeat } from "@/lib/use-agent-heartbeat";
 
 // ── Persist sidebar state across page loads ───────────────────────────────────
 const SIDEBAR_KEY = "auditx.sidebar.expanded";
@@ -53,6 +57,13 @@ const navGroups = [
     ],
   },
   {
+    title: "Autonomous",
+    items: [
+      { label: "Activity Feed", icon: Radio,  to: "/app/activity" },
+      { label: "Review Inbox",  icon: Inbox,  to: "/app/review"   },
+    ],
+  },
+  {
     title: "Account",
     items: [
       { label: "Settings", icon: Settings,    to: "/app/settings" },
@@ -70,6 +81,7 @@ function NavItem({
   active,
   collapsed,
   accent,
+  badge,
   onClick,
 }: {
   label: string;
@@ -78,6 +90,7 @@ function NavItem({
   active: boolean;
   collapsed: boolean;
   accent?: boolean;
+  badge?: number;
   onClick?: (() => void) | undefined;
 }) {
   return (
@@ -85,7 +98,7 @@ function NavItem({
       to={to}
       onClick={onClick}
       title={label}
-      className={`flex items-center rounded-xl text-sm font-medium transition-all ${
+      className={`relative flex items-center rounded-xl text-sm font-medium transition-all ${
         collapsed ? "size-10 justify-center" : "gap-3 px-3 py-2.5"
       }`}
       style={{
@@ -95,6 +108,22 @@ function NavItem({
     >
       <Icon size={18} strokeWidth={1.75} />
       {!collapsed && <span className="truncate">{label}</span>}
+      {badge != null && badge > 0 && (
+        <span
+          className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+          style={{ background: "var(--bad)" }}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+      {collapsed && badge != null && badge > 0 && (
+        <span
+          className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full text-[9px] font-bold text-white"
+          style={{ background: "var(--bad)" }}
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -114,6 +143,13 @@ function InnerShell({ children }: { children: ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen,    setNotifOpen]    = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Review inbox badge — pending approvals count
+  const { data: pendingApprovals } = usePendingApprovals(profile?.org_id);
+  const reviewBadge = (pendingApprovals ?? []).length;
+
+  // Fire heartbeat once per session to schedule cron-equivalent jobs
+  useAgentHeartbeat(!!profile?.org_id);
 
   // Persist preference
   useEffect(() => { writeSidebarPref(expanded); }, [expanded]);
@@ -237,6 +273,7 @@ function InnerShell({ children }: { children: ReactNode }) {
                   {...item}
                   collapsed={collapsed}
                   active={isActive(item.to)}
+                  badge={item.to === "/app/review" ? reviewBadge : undefined}
                   onClick={onClose}
                 />
               ))}

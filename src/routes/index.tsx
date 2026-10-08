@@ -60,43 +60,43 @@ const features = [
   {
     icon: FileSearch,
     title: "Multimodal Document Parser",
-    desc: "Extract transactions from PDFs, images, CSVs, XLSX files, and broker exports.",
+    desc: "Extract transactions from PDFs, images, CSVs, XLSX files, and broker exports — automatically, the moment files arrive.",
   },
   {
     icon: ScanSearch,
     title: "Anomaly & Discrepancy Detector",
-    desc: "Detect duplicate fills, fee mismatches, WHT inconsistencies, missing records, and other discrepancies.",
+    desc: "Detect duplicate fills, fee mismatches, WHT inconsistencies, and missing records. Runs continuously without a prompt.",
   },
   {
     icon: TrendingUp,
     title: "FIFO Tax Engine",
-    desc: "Calculate cost basis and tax-related values using deterministic code rather than LLM-generated arithmetic.",
+    desc: "Cost basis and capital-gains calculations using deterministic code — never AI-generated arithmetic. Always reproducible.",
   },
   {
     icon: GitMerge,
-    title: "Trade Reconciliation",
-    desc: "Match transactions against source records and show exact differences.",
+    title: "Autonomous Reconciliation",
+    desc: "Matches transactions against source records and posts results to your ledger. Acts on your data — every change traceable and reversible.",
   },
   {
     icon: Shield,
-    title: "Immutable Audit Log",
-    desc: "Preserve a verifiable history of important ledger changes.",
+    title: "Activity Feed & One-Click Revert",
+    desc: "Every autonomous action appears in a real-time feed. Revert any run with one click — full version history, zero data loss.",
   },
   {
     icon: BarChart3,
-    title: "Portfolio Intelligence",
-    desc: "Analyze portfolio structure and surface useful financial insights from verified data.",
+    title: "Review Inbox",
+    desc: "Low-confidence items and material decisions batch into a single inbox. Approve, reject, or skip — AuditX learns from each choice.",
   },
 ];
 
 // ── Trust steps ───────────────────────────────────────────────────────────────
 
 const steps = [
-  { n: "01", title: "Upload", desc: "Drop broker statements, contract notes, CSVs, PDFs, or images." },
-  { n: "02", title: "Extract", desc: "AuditX extracts transaction fields and assigns confidence scores." },
-  { n: "03", title: "Reconcile", desc: "Compare extracted records against your ledger and identify exact discrepancies." },
-  { n: "04", title: "Verify", desc: "Low-confidence fields and material discrepancies are routed for review." },
-  { n: "05", title: "Report", desc: "Generate a traceable, tax-ready report with supporting evidence." },
+  { n: "01", title: "Connect",    desc: "Link a Google Sheet, OneDrive file, or drop broker statements directly." },
+  { n: "02", title: "Watch",      desc: "AuditX monitors sources continuously — no button to press, no prompt to write." },
+  { n: "03", title: "Act",        desc: "High-confidence changes apply automatically. Uncertain ones go to your Review Inbox." },
+  { n: "04", title: "Trace",      desc: "Every action is logged with before/after state and a one-click revert." },
+  { n: "05", title: "Report",     desc: "Generate a traceable, tax-ready report with a full evidence chain." },
 ];
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
@@ -105,21 +105,21 @@ const tiers = [
   {
     name: "Free",
     price: "$0",
-    note: "For trying AuditX",
+    note: "Manual uploads, no continuous monitoring",
     items: ["50 parsed transactions/month", "1 tax profile", "CSV export", "Community support"],
   },
   {
     name: "Pro",
     price: "$9.99",
-    note: "For active traders",
+    note: "Continuous monitoring on up to 3 sources",
     popular: true,
-    items: ["Unlimited transactions", "PDF tax reports", "Anomaly detection", "Tax-loss harvesting"],
+    items: ["Unlimited transactions", "3 connected sources", "Activity feed + revert", "Review inbox", "PDF tax reports", "Anomaly detection"],
   },
   {
     name: "Professional",
     price: "$49",
-    note: "For professional teams and brokerages",
-    items: ["Multi-client accounts", "Team roles", "API access", "Priority reconciliation"],
+    note: "Multi-client autonomous runs and API",
+    items: ["Everything in Pro", "Unlimited connected sources", "Multi-client accounts", "Team roles", "API access", "Priority reconciliation"],
   },
 ];
 
@@ -218,9 +218,9 @@ function Home() {
               letterSpacing: "-0.02em",
             }}
           >
-            What can I analyze
+            Your broker records,
             <br />
-            for you today?
+            reconciled while you sleep.
           </motion.h1>
 
           {/* Sub-headline */}
@@ -232,8 +232,9 @@ function Home() {
             className="mx-auto mb-10 max-w-[560px] text-base leading-relaxed sm:text-lg"
             style={{ color: "var(--ink-2)" }}
           >
-            A full AI audit team — extraction, reconciliation, compliance and tax —
-            working from your real data, asking before writing.
+            AuditX acts on your data continuously — extracting, reconciling, and
+            flagging anomalies without waiting for a prompt.
+            Every change is traceable and reversible.
           </motion.p>
 
           {/* Composer — the primary focal point */}
@@ -286,8 +287,8 @@ function Home() {
                 letterSpacing: "-0.01em",
               }}
             >
-              Everything a financial audit team does,
-              <br className="hidden sm:block" /> automated end-to-end
+              Autonomous by default.
+              <br className="hidden sm:block" /> Traceable by design.
             </h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

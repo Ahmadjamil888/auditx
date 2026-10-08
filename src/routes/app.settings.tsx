@@ -7,6 +7,7 @@ import {
   Key,
   Loader2,
   Plus,
+  Share2,
   Trash2,
   Users,
 } from "lucide-react";
@@ -24,20 +25,22 @@ import {
   useDeleteBroker,
   useDeleteOrganization,
 } from "@/lib/data-hooks";
+import { ConnectedSourcesTab } from "@/components/app/ConnectedSourcesTab";
 
 
 export const Route = createFileRoute("/app/settings")({
   component: Settings,
 });
 
-type Tab = "org" | "tax-profiles" | "brokers" | "team" | "notifications" | "api";
+type Tab = "org" | "tax-profiles" | "brokers" | "sources" | "team" | "notifications" | "api";
 
 const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
-  { id: "org", label: "Organisation", icon: Building2 },
-  { id: "tax-profiles", label: "Tax Profiles", icon: CreditCard },
-  { id: "brokers", label: "Broker Accounts", icon: Key },
-  { id: "team", label: "Team & Roles", icon: Users },
-  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "org",          label: "Organisation",      icon: Building2  },
+  { id: "tax-profiles", label: "Tax Profiles",       icon: CreditCard },
+  { id: "brokers",      label: "Broker Accounts",    icon: Key        },
+  { id: "sources",      label: "Connected Sources",  icon: Share2     },
+  { id: "team",         label: "Team & Roles",        icon: Users      },
+  { id: "notifications",label: "Notifications",      icon: Bell       },
 ];
 
 function Settings() {
@@ -542,6 +545,18 @@ function Settings() {
                     Team invitations require additional setup. Contact support to enable team collaboration.
                   </p>
                 </div>
+              </Panel>
+            </motion.div>
+          )}
+
+          {tab === "sources" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <Panel>
+                <p className="mb-1 text-sm font-semibold">Connected Sources</p>
+                <p className="mb-5 text-xs" style={{ color: "var(--ink-3)" }}>
+                  AuditX monitors these sources continuously and acts on changes automatically.
+                </p>
+                <ConnectedSourcesTab orgId={profile?.org_id ?? ""} />
               </Panel>
             </motion.div>
           )}

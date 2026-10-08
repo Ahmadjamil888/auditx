@@ -763,11 +763,11 @@ function Chat({
                 <Sparkles size={26} strokeWidth={1.5} style={{ color: "var(--color-accent)" }} />
               </div>
               <h1 style={{ fontFamily: "var(--font-heading)", fontSize: "clamp(1.4rem,3vw,2rem)" }}>
-                What should AuditX analyze today?
+                Ask AuditX a question about your data
               </h1>
               <p className="mt-3 max-w-lg text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
-                Attach any broker statement, trade slip, CSV, spreadsheet or PDF — or just describe
-                what you need. The AI team reads your real ledger and asks before writing anything.
+                AuditX works autonomously in the background. Use this chat to ask
+                questions, investigate anomalies, or request a specific analysis.
               </p>
             </motion.div>
           )}
@@ -875,7 +875,7 @@ function Chat({
             <PromptInputTextarea
               ref={textareaRef}
               autoFocus
-              placeholder="Ask AuditX to reconcile, analyze, correct or export your financial data…"
+              placeholder="Ask AuditX a question about your data…"
             />
             <PromptInputFooter>
               <PromptInputTools>
@@ -891,7 +891,7 @@ function Chat({
           </PromptInput>
 
           <p className="mt-2 text-center text-[11px]" style={{ color: "var(--ink-3)" }}>
-            AuditX reads your real ledger. Ledger writes require your explicit approval.
+            AuditX acts on your data autonomously. Every change is traceable and reversible.
           </p>
         </div>
       </div>

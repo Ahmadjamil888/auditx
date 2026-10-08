@@ -452,3 +452,203 @@ export function useUniversalImport() {
     },
   });
 }
+
+// ── Agent Jobs ────────────────────────────────────────────────────────────────
+
+import type { AgentJob, AgentApproval } from "./agent-queue";
+
+export function useAgentJobs(orgId: string | undefined, limit = 50) {
+  return useQuery({
+    queryKey: ["agent_jobs", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agent_jobs")
+        .select("*")
+        .eq("org_id", orgId!)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as AgentJob[];
+    },
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+}
+
+export function usePendingApprovals(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["agent_approvals_pending", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agent_approvals")
+        .select("*")
+        .eq("org_id", orgId!)
+        .eq("status", "pending")
+        .order("created_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as AgentApproval[];
+    },
+    refetchInterval: 15_000,
+    staleTime: 5_000,
+  });
+}
+
+export function useDecideApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      approvalId,
+      decision,
+      userId,
+      orgId,
+    }: {
+      approvalId: string;
+      decision:   "approved" | "rejected" | "skipped";
+      userId:     string;
+      orgId:      string;
+    }) => {
+      const { error } = await supabase
+        .from("agent_approvals")
+        .update({
+          status:     decision,
+          decided_by: userId,
+          decided_at: new Date().toISOString(),
+        } as never)
+        .eq("id", approvalId)
+        .eq("org_id", orgId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, { orgId }) => {
+      void qc.invalidateQueries({ queryKey: ["agent_approvals_pending", orgId] });
+    },
+  });
+}
+
+export function useRevertRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ runId, orgId }: { runId: string; orgId: string }) => {
+      const { data, error } = await supabase.rpc("revert_run", { p_run_id: runId });
+      if (error) throw new Error(error.message);
+      return (data as number) ?? 0;
+    },
+    onSuccess: (_d, { orgId }) => {
+      void qc.invalidateQueries({ queryKey: ["agent_jobs",     orgId] });
+      void qc.invalidateQueries({ queryKey: ["transactions",   orgId] });
+    },
+  });
+}
+
+// ── Connected Sources ─────────────────────────────────────────────────────────
+
+import type { ConnectedSource, SourceRules } from "./connected-sources";
+
+export function useConnectedSources(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["connected_sources", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("connected_sources")
+        .select("id,org_id,source_type,external_id,display_name,last_hash,watch_expiry,paused,rules,last_synced_at,created_at,updated_at")
+        .eq("org_id", orgId!)
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as ConnectedSource[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateSourceRules() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sourceId, orgId, rules }: { sourceId: string; orgId: string; rules: SourceRules }) => {
+      const { error } = await supabase
+        .from("connected_sources")
+        .update({ rules: rules as never, updated_at: new Date().toISOString() } as never)
+        .eq("id", sourceId)
+        .eq("org_id", orgId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, { orgId }) => qc.invalidateQueries({ queryKey: ["connected_sources", orgId] }),
+  });
+}
+
+export function usePauseSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sourceId, orgId, paused }: { sourceId: string; orgId: string; paused: boolean }) => {
+      const { error } = await supabase
+        .from("connected_sources")
+        .update({ paused, updated_at: new Date().toISOString() } as never)
+        .eq("id", sourceId)
+        .eq("org_id", orgId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, { orgId }) => qc.invalidateQueries({ queryKey: ["connected_sources", orgId] }),
+  });
+}
+
+export function useDeleteSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sourceId, orgId }: { sourceId: string; orgId: string }) => {
+      const { error } = await supabase
+        .from("connected_sources")
+        .delete()
+        .eq("id", sourceId)
+        .eq("org_id", orgId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, { orgId }) => qc.invalidateQueries({ queryKey: ["connected_sources", orgId] }),
+  });
+}
+
+export function useOrgPolicyConfig(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["org_policy_config", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("org_policy_config")
+        .select("*")
+        .eq("org_id", orgId!)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateOrgPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orgId, updates }: { orgId: string; updates: Record<string, unknown> }) => {
+      const { error } = await supabase
+        .from("org_policy_config")
+        .update({ ...updates, updated_at: new Date().toISOString() } as never)
+        .eq("org_id", orgId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_d, { orgId }) => qc.invalidateQueries({ queryKey: ["org_policy_config", orgId] }),
+  });
+}
+
+export function useOrgFeatureFlags(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["org_feature_flags", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("org_feature_flags")
+        .select("*")
+        .eq("org_id", orgId!)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}
