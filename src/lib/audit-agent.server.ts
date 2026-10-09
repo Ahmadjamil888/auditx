@@ -10,15 +10,7 @@ export const AI_MODEL = "openai/gpt-6-astra";
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
 /** Must be passed to every streamText call that uses the resolved model. */
-export const AI_PROVIDER_OPTIONS = {
-  openai: {
-    forceReasoning: true,
-    reasoningEffort: "low",
-    reasoningSummary: "auto",
-    store: false,
-    include: ["reasoning.encrypted_content"],
-  },
-} as const;
+export const AI_PROVIDER_OPTIONS = {} as const;
 
 export interface ResolvedModel {
   provider: "lovable" | "openrouter" | "groq";
@@ -31,7 +23,11 @@ function readEnv(name: string, env?: Record<string, unknown>): string | undefine
   const fromProcess = typeof process !== "undefined" ? process.env?.[name] : undefined;
   const globalEnv = (globalThis as { __VERCEL_ENV__?: Record<string, unknown> }).__VERCEL_ENV__;
   const candidate = fromProcess ?? env?.[name] ?? globalEnv?.[name];
-  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
+  if (typeof candidate !== "string") return undefined;
+  const trimmed = candidate.trim();
+  // Reject empty strings and obvious placeholder values
+  if (!trimmed || trimmed.startsWith("your-") || trimmed === "changeme" || trimmed === "placeholder") return undefined;
+  return trimmed;
 }
 
 /**
@@ -65,7 +61,7 @@ export async function resolveAgentModel(env?: Record<string, unknown>): Promise<
 
   const groqKey = readEnv("GROQ_API_KEY", env);
   if (groqKey) {
-    const modelId = readEnv("GROQ_MODEL", env) ?? "openai/gpt-oss-20b";
+    const modelId = readEnv("GROQ_MODEL", env) ?? "llama-3.3-70b-versatile";
     const provider = createOpenAICompatible({
       name: "groq",
       baseURL: "https://api.groq.com/openai/v1",
