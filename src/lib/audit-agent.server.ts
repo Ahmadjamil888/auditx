@@ -1,5 +1,6 @@
-// ─── AuditX AI Provider — Lovable AI Gateway ──────────────────────────────────
-// Server-only. Uses LOVABLE_API_KEY via the OpenAI Responses API.
+// ─── AuditX AI Provider ────────────────────────────────────────────────────────
+// Server-only. Provider priority: OpenRouter → Lovable AI → Groq.
+// Set OPENROUTER_API_KEY (and optionally OPENROUTER_MODEL) in your .env.
 
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -34,21 +35,10 @@ function readEnv(name: string, env?: Record<string, unknown>): string | undefine
 }
 
 /**
- * Lovable AI is primary. When the app is hosted somewhere without LOVABLE_API_KEY
- * (e.g. a self-managed Vercel deployment), fall back to OPENROUTER_API_KEY, then GROQ_API_KEY.
+ * OpenRouter is primary. Falls back to LOVABLE_API_KEY (Lovable Cloud hosting),
+ * then GROQ_API_KEY. Set OPENROUTER_API_KEY in your .env to use OpenRouter.
  */
 export async function resolveAgentModel(env?: Record<string, unknown>): Promise<ResolvedModel | null> {
-  const lovableKey = readEnv("LOVABLE_API_KEY", env);
-  if (lovableKey) {
-    const provider = createOpenAI({
-      baseURL: GATEWAY,
-      apiKey: lovableKey,
-      headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    });
-    const model = provider.responses(AI_MODEL) as LanguageModel;
-    return { provider: "lovable", modelId: AI_MODEL, model, cascade: [{ id: AI_MODEL, model }] };
-  }
-
   const openRouterKey = readEnv("OPENROUTER_API_KEY", env);
   if (openRouterKey) {
     const modelId = readEnv("OPENROUTER_MODEL", env) ?? "openai/gpt-4o-mini";
@@ -60,6 +50,17 @@ export async function resolveAgentModel(env?: Record<string, unknown>): Promise<
     });
     const model = provider.chatModel(modelId) as LanguageModel;
     return { provider: "openrouter", modelId, model, cascade: [{ id: modelId, model }] };
+  }
+
+  const lovableKey = readEnv("LOVABLE_API_KEY", env);
+  if (lovableKey) {
+    const provider = createOpenAI({
+      baseURL: GATEWAY,
+      apiKey: lovableKey,
+      headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    });
+    const model = provider.responses(AI_MODEL) as LanguageModel;
+    return { provider: "lovable", modelId: AI_MODEL, model, cascade: [{ id: AI_MODEL, model }] };
   }
 
   const groqKey = readEnv("GROQ_API_KEY", env);

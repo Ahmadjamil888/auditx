@@ -1046,13 +1046,11 @@ function dataTransferFiles(files: File[]): FileList {
   return dt.files;
 }
 
-// Lovable AI only runs on Lovable hosting. When the app is served elsewhere
-// (e.g. Vercel), send AI requests to the Lovable-hosted copy of this app.
+// Always call /api/chat on the same origin as the app.
+// Override with VITE_AI_API_ORIGIN if you need to proxy to a separate backend.
 function aiApiOrigin(): string {
   const configured = import.meta.env["VITE_AI_API_ORIGIN"] as string | undefined;
   if (configured) return configured.replace(/\/$/, "");
-  if (typeof window === "undefined") return "";
-  const host = window.location.hostname;
-  if (host.endsWith(".lovable.app") || host === "localhost" || host === "127.0.0.1") return "";
-  return "https://project--5357fa68-f4af-40d8-9c7a-388f4085158d.lovable.app";
+  // Same-origin for all deployments — avoids CORS issues on custom domains.
+  return "";
 }
